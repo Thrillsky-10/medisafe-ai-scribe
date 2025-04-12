@@ -1,5 +1,7 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,8 +21,11 @@ import {
   Upload as UploadIcon,
   X,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { fetchPatients } from "@/services/patientService";
+import { uploadPrescriptionDocument, createPrescription } from "@/services/prescriptionService";
 
 const Upload = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -28,6 +33,19 @@ const Upload = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [docType, setDocType] = useState("prescription");
   const [patientId, setPatientId] = useState("");
+  const [medicationName, setMedicationName] = useState("");
+  const [dosage, setDosage] = useState("");
+  const [refills, setRefills] = useState(0);
+  const navigate = useNavigate();
+  
+  // Fetch patients for the dropdown
+  const { data: patients = [] } = useQuery({
+    queryKey: ['patients'],
+    queryFn: fetchPatients,
+  });
+  
+  // Get patient name from ID
+  const selectedPatient = patients.find(p => p.id === patientId);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -52,6 +70,22 @@ const Upload = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!patientId) {
+      toast.error("Please select a patient");
+      return;
+    }
+    
+    if (!medicationName) {
+      toast.error("Please enter medication name");
+      return;
+    }
+    
+    if (!dosage) {
+      toast.error("Please enter dosage");
+      return;
+    }
+    
     if (!uploadedFile) {
       toast.error("Please select a file to upload");
       return;
@@ -59,18 +93,28 @@ const Upload = () => {
 
     setIsUploading(true);
     try {
-      // Simulate upload delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Upload document
+      const uploadResult = await uploadPrescriptionDocument(uploadedFile, patientId);
+      
       setIsUploading(false);
       setIsProcessing(true);
+      
+      // Create prescription record
+      await createPrescription({
+        patient_id: patientId,
+        patient_name: selectedPatient?.name || 'Unknown Patient',
+        medication: medicationName,
+        dosage: dosage,
+        prescribed_date: new Date().toISOString(),
+        refills: refills,
+        status: 'active',
+        document_url: uploadResult.url
+      });
 
-      // Simulate processing delay
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      toast.success("Document processed successfully");
-      // In a real app, we would navigate to the document view or show extracted data
-    } catch (error) {
-      toast.error("Error processing document");
+      toast.success("Prescription uploaded and processed successfully");
+      navigate('/prescriptions');
+    } catch (error: any) {
+      toast.error(error.message || "Error processing document");
     } finally {
       setIsProcessing(false);
     }
@@ -107,12 +151,56 @@ const Upload = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="patientId">Patient ID</Label>
-                  <Input
-                    id="patientId"
-                    placeholder="Enter patient ID"
+                  <Label htmlFor="patientId">Patient</Label>
+                  <Select
                     value={patientId}
-                    onChange={(e) => setPatientId(e.target.value)}
+                    onValueChange={setPatientId}
+                  >
+                    <SelectTrigger id="patientId">
+                      <SelectValue placeholder="Select patient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patients.map((patient) => (
+                        <SelectItem key={patient.id} value={patient.id}>
+                          {patient.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="medication">Medication Name</Label>
+                  <Input
+                    id="medication"
+                    placeholder="Enter medication name"
+                    value={medicationName}
+                    onChange={(e) => setMedicationName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dosage">Dosage</Label>
+                  <Input
+                    id="dosage"
+                    placeholder="E.g. 10mg, twice daily"
+                    value={dosage}
+                    onChange={(e) => setDosage(e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="refills">Refills</Label>
+                  <Input
+                    id="refills"
+                    type="number"
+                    min={0}
+                    placeholder="Number of refills"
+                    value={refills}
+                    onChange={(e) => setRefills(parseInt(e.target.value))}
                   />
                 </div>
               </div>
@@ -189,21 +277,21 @@ const Upload = () => {
               </div>
 
               <div className="flex justify-end space-x-3">
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" onClick={() => navigate('/dashboard')}>
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isUploading || isProcessing || !uploadedFile}
+                  disabled={isUploading || isProcessing || !uploadedFile || !patientId || !medicationName || !dosage}
                 >
                   {isUploading ? (
                     <>
-                      <UploadIcon className="mr-2 h-4 w-4 animate-pulse" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Uploading...
                     </>
                   ) : isProcessing ? (
                     <>
-                      <div className="h-4 w-4 mr-2 border-2 border-t-transparent border-white rounded-full animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Processing...
                     </>
                   ) : (

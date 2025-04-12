@@ -1,5 +1,7 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,93 +20,45 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FileText, Download, EyeIcon, Filter, RefreshCw, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Download, EyeIcon, Filter, RefreshCw, Search, ChevronLeft, ChevronRight, Plus, Loader2 } from "lucide-react";
+import { fetchPrescriptions } from "@/services/prescriptionService";
+import { formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 
 const Prescriptions = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [status, setStatus] = useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const itemsPerPage = 10;
 
-  // Mock prescription data
-  const prescriptions = [
-    {
-      id: "RX-2025-0142",
-      patientName: "Sarah Johnson",
-      patientId: "PT-0021",
-      medication: "Lisinopril 10mg",
-      dosage: "1 tablet daily",
-      prescribedDate: "2025-04-02",
-      refills: 2,
-      status: "active",
-    },
-    {
-      id: "RX-2025-0138",
-      patientName: "Michael Chen",
-      patientId: "PT-0015",
-      medication: "Metformin 500mg",
-      dosage: "1 tablet twice daily",
-      prescribedDate: "2025-04-01",
-      refills: 3,
-      status: "active",
-    },
-    {
-      id: "RX-2025-0134",
-      patientName: "Emily Rodriguez",
-      patientId: "PT-0018",
-      medication: "Atorvastatin 20mg",
-      dosage: "1 tablet at bedtime",
-      prescribedDate: "2025-03-30",
-      refills: 5,
-      status: "active",
-    },
-    {
-      id: "RX-2025-0129",
-      patientName: "James Wilson",
-      patientId: "PT-0034",
-      medication: "Omeprazole 20mg",
-      dosage: "1 capsule before breakfast",
-      prescribedDate: "2025-03-28",
-      refills: 1,
-      status: "active",
-    },
-    {
-      id: "RX-2025-0124",
-      patientName: "David Thompson",
-      patientId: "PT-0027",
-      medication: "Amoxicillin 500mg",
-      dosage: "1 capsule three times daily",
-      prescribedDate: "2025-03-25",
-      refills: 0,
-      status: "completed",
-    },
-    {
-      id: "RX-2025-0118",
-      patientName: "Sarah Johnson",
-      patientId: "PT-0021",
-      medication: "Azithromycin 250mg",
-      dosage: "1 tablet daily for 5 days",
-      prescribedDate: "2025-03-20",
-      refills: 0,
-      status: "completed",
-    },
-    {
-      id: "RX-2025-0112",
-      patientName: "Robert Garcia",
-      patientId: "PT-0019",
-      medication: "Prednisone 10mg",
-      dosage: "Tapering dose as directed",
-      prescribedDate: "2025-03-15",
-      refills: 0,
-      status: "expired",
-    },
-  ];
+  // Fetch prescriptions with filters
+  const { 
+    data: prescriptions = [], 
+    isLoading, 
+    refetch 
+  } = useQuery({
+    queryKey: ['prescriptions', searchTerm, status, sortOrder],
+    queryFn: () => fetchPrescriptions(searchTerm, status, sortOrder),
+  });
 
-  // Filter prescriptions based on search term
-  const filteredPrescriptions = prescriptions.filter(
-    (rx) =>
-      rx.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rx.medication.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rx.id.toLowerCase().includes(searchTerm.toLowerCase())
+  // Handle refresh button click
+  const handleRefresh = () => {
+    refetch();
+    toast.success("Prescription data refreshed");
+  };
+
+  // Calculate pagination
+  const totalPages = Math.ceil(prescriptions.length / itemsPerPage);
+  const paginatedPrescriptions = prescriptions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, status, sortOrder]);
 
   return (
     <AppLayout>
@@ -112,14 +66,20 @@ const Prescriptions = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h1 className="text-2xl font-bold">Prescription Records</h1>
           <div className="flex gap-2">
-            <Button variant="outline" className="whitespace-nowrap">
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button variant="outline" className="whitespace-nowrap" onClick={handleRefresh} disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
               Refresh
             </Button>
-            <Button className="whitespace-nowrap">
-              <FileText className="h-4 w-4 mr-2" />
-              New Prescription
-            </Button>
+            <Link to="/upload">
+              <Button className="whitespace-nowrap">
+                <Plus className="h-4 w-4 mr-2" />
+                New Prescription
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -135,7 +95,7 @@ const Prescriptions = () => {
             />
           </div>
           <div className="flex gap-2">
-            <Select defaultValue="all">
+            <Select value={status} onValueChange={setStatus}>
               <SelectTrigger className="w-32">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -146,7 +106,7 @@ const Prescriptions = () => {
                 <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
-            <Select defaultValue="newest">
+            <Select value={sortOrder} onValueChange={setSortOrder}>
               <SelectTrigger className="w-32">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
@@ -177,25 +137,33 @@ const Prescriptions = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPrescriptions.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedPrescriptions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No prescriptions found matching your search.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredPrescriptions.map((rx) => (
+                paginatedPrescriptions.map((rx) => (
                   <TableRow key={rx.id}>
                     <TableCell className="font-medium">{rx.id}</TableCell>
                     <TableCell>
                       <div>
-                        <div>{rx.patientName}</div>
-                        <div className="text-xs text-muted-foreground">{rx.patientId}</div>
+                        <div>{rx.patient_name}</div>
+                        <div className="text-xs text-muted-foreground">{rx.patient_id}</div>
                       </div>
                     </TableCell>
                     <TableCell>{rx.medication}</TableCell>
                     <TableCell>{rx.dosage}</TableCell>
-                    <TableCell>{new Date(rx.prescribedDate).toLocaleDateString()}</TableCell>
+                    <TableCell>{formatDate(rx.prescribed_date)}</TableCell>
                     <TableCell>{rx.refills}</TableCell>
                     <TableCell>
                       <span
@@ -215,9 +183,15 @@ const Prescriptions = () => {
                         <Button size="icon" variant="ghost">
                           <EyeIcon className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost">
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        {rx.document_url && (
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => window.open(rx.document_url, '_blank')}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -228,37 +202,39 @@ const Prescriptions = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {Math.min(filteredPrescriptions.length, 10)} of{" "}
-            {filteredPrescriptions.length} prescriptions
-          </p>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(currentPage - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="min-w-8 px-3"
-            >
-              {currentPage}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={filteredPrescriptions.length <= 10}
-              onClick={() => setCurrentPage(currentPage + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        {!isLoading && prescriptions.length > 0 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {Math.min(itemsPerPage * (currentPage - 1) + 1, prescriptions.length)} to {Math.min(currentPage * itemsPerPage, prescriptions.length)} of{" "}
+              {prescriptions.length} prescriptions
+            </p>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-w-8 px-3"
+              >
+                {currentPage}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </AppLayout>
   );

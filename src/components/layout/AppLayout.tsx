@@ -1,5 +1,5 @@
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -23,15 +23,14 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
+  const { signOut, user } = useAuth();
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const handleLogout = () => {
-    toast.success("Successfully logged out");
-    // In a real app, we would also clear auth tokens here
-    window.location.href = "/";
+  const handleLogout = async () => {
+    await signOut();
   };
 
   const navItems = [
@@ -61,6 +60,17 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       icon: <MessageCircle className="h-5 w-5" />,
     },
   ];
+
+  // Get user initials for the avatar
+  const getUserInitials = () => {
+    if (!user || !user.user_metadata?.full_name) return "U";
+    const fullName = user.user_metadata.full_name as string;
+    return fullName
+      .split(' ')
+      .map(name => name.charAt(0))
+      .join('')
+      .toUpperCase();
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -125,7 +135,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
               <span>Report Issue</span>
             </Button>
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
-              DS
+              {getUserInitials()}
             </div>
           </div>
         </header>

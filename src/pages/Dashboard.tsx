@@ -1,3 +1,7 @@
+
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,30 +13,45 @@ import {
   Pill,
   MessageSquare,
   Users,
+  Loader2
 } from "lucide-react";
+import { fetchRecentPrescriptions } from "@/services/prescriptionService";
+import { fetchPatientStats } from "@/services/patientService";
+import { fetchPrescriptionStats } from "@/services/prescriptionService";
+import { fetchAIInteractionStats } from "@/services/analyticsService";
+import { formatDate } from "@/lib/utils";
 
 const Dashboard = () => {
-  // Mock data - would come from an API in a real app
-  const recentPrescriptions = [
-    {
-      id: 1,
-      patientName: "Sarah Johnson",
-      medication: "Lisinopril 10mg",
-      date: "2025-04-10",
-    },
-    {
-      id: 2,
-      patientName: "Michael Chen",
-      medication: "Metformin 500mg",
-      date: "2025-04-09",
-    },
-    {
-      id: 3,
-      patientName: "Emily Rodriguez",
-      medication: "Atorvastatin 20mg",
-      date: "2025-04-08",
-    },
-  ];
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+  
+  // Fetch recent prescriptions
+  const { 
+    data: recentPrescriptions = [], 
+    isLoading: isLoadingPrescriptions 
+  } = useQuery({
+    queryKey: ['recentPrescriptions'],
+    queryFn: () => fetchRecentPrescriptions(),
+  });
+  
+  // Fetch stats
+  const { data: prescriptionStats, isLoading: isLoadingPrescriptionStats } = useQuery({
+    queryKey: ['prescriptionStats'],
+    queryFn: fetchPrescriptionStats,
+  });
+  
+  const { data: patientStats, isLoading: isLoadingPatientStats } = useQuery({
+    queryKey: ['patientStats'],
+    queryFn: fetchPatientStats,
+  });
+  
+  const { data: aiInteractions, isLoading: isLoadingAIStats } = useQuery({
+    queryKey: ['aiInteractionStats'],
+    queryFn: fetchAIInteractionStats,
+  });
 
   return (
     <AppLayout>
@@ -40,14 +59,16 @@ const Dashboard = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <div className="flex space-x-2">
-            <Button>
+            <Button variant="outline">
               <Calendar className="mr-2 h-4 w-4" />
-              <span>Apr 12, 2025</span>
+              <span>{currentDate}</span>
             </Button>
-            <Button variant="default">
-              <Plus className="mr-2 h-4 w-4" />
-              <span>New Prescription</span>
-            </Button>
+            <Link to="/upload">
+              <Button variant="default">
+                <Plus className="mr-2 h-4 w-4" />
+                <span>New Prescription</span>
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -60,7 +81,13 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Total Prescriptions</p>
-                <h3 className="text-2xl font-bold">1,284</h3>
+                {isLoadingPrescriptionStats ? (
+                  <div className="h-6 flex items-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <h3 className="text-2xl font-bold">{prescriptionStats?.total.toLocaleString() || 0}</h3>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -72,7 +99,13 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Active Medications</p>
-                <h3 className="text-2xl font-bold">326</h3>
+                {isLoadingPrescriptionStats ? (
+                  <div className="h-6 flex items-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <h3 className="text-2xl font-bold">{prescriptionStats?.active.toLocaleString() || 0}</h3>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -84,7 +117,13 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Patients</p>
-                <h3 className="text-2xl font-bold">592</h3>
+                {isLoadingPatientStats ? (
+                  <div className="h-6 flex items-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <h3 className="text-2xl font-bold">{patientStats?.total.toLocaleString() || 0}</h3>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -96,7 +135,13 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">AI Interactions</p>
-                <h3 className="text-2xl font-bold">89</h3>
+                {isLoadingAIStats ? (
+                  <div className="h-6 flex items-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <h3 className="text-2xl font-bold">{aiInteractions?.toLocaleString() || 0}</h3>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -109,30 +154,42 @@ const Dashboard = () => {
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium flex items-center justify-between">
                 Recent Prescriptions
-                <Button variant="ghost" size="sm">
-                  View All
-                </Button>
+                <Link to="/prescriptions">
+                  <Button variant="ghost" size="sm">
+                    View All
+                  </Button>
+                </Link>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {recentPrescriptions.map((prescription) => (
-                  <div
-                    key={prescription.id}
-                    className="prescription-item flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="font-medium">{prescription.patientName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {prescription.medication}
-                      </p>
+              {isLoadingPrescriptions ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : recentPrescriptions.length > 0 ? (
+                <div className="space-y-2">
+                  {recentPrescriptions.map((prescription: any) => (
+                    <div
+                      key={prescription.id}
+                      className="prescription-item flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="font-medium">{prescription.patient_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {prescription.medication}
+                        </p>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {formatDate(prescription.prescribed_date)}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {new Date(prescription.date).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No prescriptions found. Create your first prescription.
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -142,22 +199,30 @@ const Dashboard = () => {
               <CardTitle className="text-lg font-medium">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full justify-start" variant="outline">
-                <FileText className="mr-2 h-4 w-4" />
-                <span>Upload Prescription</span>
-              </Button>
-              <Button className="w-full justify-start" variant="outline">
-                <BarChart3 className="mr-2 h-4 w-4" />
-                <span>View Analytics</span>
-              </Button>
-              <Button className="w-full justify-start" variant="outline">
-                <Users className="mr-2 h-4 w-4" />
-                <span>Patient Records</span>
-              </Button>
-              <Button className="w-full justify-start" variant="outline">
-                <MessageSquare className="mr-2 h-4 w-4" />
-                <span>Ask AI Assistant</span>
-              </Button>
+              <Link to="/upload">
+                <Button className="w-full justify-start" variant="outline">
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Upload Prescription</span>
+                </Button>
+              </Link>
+              <Link to="/analytics">
+                <Button className="w-full justify-start" variant="outline">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  <span>View Analytics</span>
+                </Button>
+              </Link>
+              <Link to="/prescriptions">
+                <Button className="w-full justify-start" variant="outline">
+                  <Users className="mr-2 h-4 w-4" />
+                  <span>Patient Records</span>
+                </Button>
+              </Link>
+              <Link to="/assistant">
+                <Button className="w-full justify-start" variant="outline">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  <span>Ask AI Assistant</span>
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

@@ -1,259 +1,261 @@
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/layout/AppLayout";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Bot,
-  FileSearch,
-  Mic,
-  PanelRightOpen,
-  Search,
-  Send,
-  User,
-} from "lucide-react";
-import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Send, Info, Mic, Loader2, Bot } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 
-interface ChatMessage {
+interface Message {
   id: string;
-  type: "user" | "ai";
-  message: string;
+  content: string;
+  role: "user" | "assistant";
   timestamp: Date;
 }
 
 const Assistant = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<Message[]>([
     {
-      id: "1",
-      type: "ai",
-      message:
-        "Hello, I'm your MediSafe AI assistant. I can help you retrieve patient prescription histories and answer questions about medications. How can I assist you today?",
+      id: "welcome",
+      content: "Hello, I'm your medical assistant. How can I help you today?",
+      role: "assistant",
       timestamp: new Date(),
     },
   ]);
-  const [inputValue, setInputValue] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showInfo, setShowInfo] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Auto-scroll to bottom of messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
+  // This is where you'll integrate your custom API
   const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+    if (!input.trim()) return;
 
-    const userMessage = {
+    // Add user message to chat
+    const userMessage: Message = {
       id: Date.now().toString(),
-      type: "user" as const,
-      message: inputValue.trim(),
+      content: input,
+      role: "user",
       timestamp: new Date(),
     };
-
     setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setIsProcessing(true);
+    
+    // Clear input
+    setInput("");
+    setIsLoading(true);
 
-    // Simulate AI response delay
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Example responses based on user query
-      let aiResponse = "I'm not sure how to respond to that. Could you rephrase your question?";
+      // This is a placeholder for your custom API integration
+      // TODO: Replace with actual API call to your service
+      setTimeout(() => {
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: "This is a placeholder response. Connect your custom AI API here.",
+          role: "assistant",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        setIsLoading(false);
+      }, 1000);
       
-      if (inputValue.toLowerCase().includes("diabetes") || inputValue.toLowerCase().includes("medication")) {
-        aiResponse = "I've found 3 patients with diabetes medications in 2024. Patient A is on Metformin 500mg twice daily, Patient B is on Glipizide 5mg daily, and Patient C is on Januvia 100mg daily. Would you like more details on any of these prescriptions?";
-      } else if (inputValue.toLowerCase().includes("show") || inputValue.toLowerCase().includes("find") || inputValue.toLowerCase().includes("search")) {
-        aiResponse = "I'll search for that information in our secure prescription database. Please note that all patient information is protected under HIPAA regulations and my responses automatically redact sensitive personal information.";
-      } else if (inputValue.toLowerCase().includes("hello") || inputValue.toLowerCase().includes("hi")) {
-        aiResponse = "Hello! I'm your MediSafe AI assistant. I can help you retrieve patient prescription histories, analyze medication patterns, or answer questions about prescriptions and treatments. How can I help you today?";
-      }
-
-      const botMessage = {
+      // The actual API integration would look something like this:
+      /*
+      const response = await fetch('YOUR_API_ENDPOINT', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: input,
+          history: messages.map(m => ({
+            content: m.content,
+            role: m.role
+          }))
+        }),
+      });
+      
+      const data = await response.json();
+      
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        type: "ai" as const,
-        message: aiResponse,
+        content: data.response,
+        role: "assistant",
         timestamp: new Date(),
       };
-
-      setMessages((prev) => [...prev, botMessage]);
+      
+      setMessages((prev) => [...prev, assistantMessage]);
+      */
+      
     } catch (error) {
-      toast.error("Error communicating with the AI assistant");
+      console.error('Error in AI API call:', error);
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, I encountered an error. Please try again later.",
+        role: "assistant",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
+      setIsLoading(false);
     }
   };
 
   return (
     <AppLayout>
-      <div className="h-full flex flex-col">
+      <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">AI Assistant</h1>
 
-        <div className="flex flex-1 gap-6 h-full">
-          {/* Main Chat Area */}
-          <div className="flex-1 flex flex-col">
-            <Card className="flex flex-col h-[calc(100vh-220px)]">
-              <CardContent className="flex flex-col flex-1 p-0">
-                {/* Chat Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages.map((msg) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Main chat interface */}
+          <div className="md:col-span-2 flex flex-col h-[calc(100vh-240px)]">
+            <Card className="flex-1 flex flex-col">
+              <CardHeader className="pb-2 border-b">
+                <CardTitle className="text-lg font-medium flex items-center">
+                  <Bot className="mr-2 h-5 w-5 text-primary" />
+                  Medical Assistant
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-auto p-4">
+                <div className="space-y-4">
+                  {messages.map((message) => (
                     <div
-                      key={msg.id}
+                      key={message.id}
                       className={`flex ${
-                        msg.type === "user" ? "justify-end" : "justify-start"
+                        message.role === "user" ? "justify-end" : "justify-start"
                       }`}
                     >
                       <div
-                        className={`flex items-start max-w-[80%] ${
-                          msg.type === "user"
-                            ? "chat-message-user"
-                            : "chat-message-ai"
+                        className={`max-w-[80%] rounded-lg p-3 ${
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground rounded-tr-none"
+                            : "bg-muted rounded-tl-none"
                         }`}
                       >
-                        {msg.type === "ai" && (
-                          <Bot className="h-5 w-5 mr-2 shrink-0 mt-1" />
-                        )}
-                        <div>
-                          <div className="text-sm">{msg.message}</div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {msg.timestamp.toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
+                        <div className="text-sm">{message.content}</div>
+                        <div className="text-xs text-muted-foreground mt-1 opacity-70">
+                          {formatDate(message.timestamp.toISOString())}
                         </div>
-                        {msg.type === "user" && (
-                          <User className="h-5 w-5 ml-2 shrink-0 mt-1" />
-                        )}
                       </div>
                     </div>
                   ))}
-                  {isProcessing && (
+                  {isLoading && (
                     <div className="flex justify-start">
-                      <div className="chat-message-ai">
-                        <Bot className="h-5 w-5 mr-2" />
-                        <div className="flex space-x-1">
-                          <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                          <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
-                          <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "600ms" }}></div>
+                      <div className="max-w-[80%] rounded-lg p-3 bg-muted rounded-tl-none">
+                        <div className="flex items-center space-x-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Thinking...</span>
                         </div>
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input Area */}
-                <div className="border-t p-4">
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      type="button"
-                    >
-                      <Mic className="h-4 w-4" />
-                    </Button>
-                    <div className="relative flex-1">
-                      <Input
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Ask a question about patient prescriptions..."
-                        className="pr-10"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="absolute right-0 top-0 h-full"
-                        onClick={handleSendMessage}
-                        disabled={!inputValue.trim() || isProcessing}
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      type="button"
-                      onClick={() => setShowInfo(!showInfo)}
-                    >
-                      <PanelRightOpen className="h-4 w-4" />
-                    </Button>
-                  </div>
                 </div>
               </CardContent>
+              <div className="p-4 border-t">
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Ask about medications, patient history, dosages..."
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                    disabled={isLoading}
+                  />
+                  <Button 
+                    size="icon" 
+                    disabled={isLoading || !input.trim()}
+                    onClick={handleSendMessage}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="outline">
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </Card>
           </div>
 
-          {/* Information Panel */}
-          {showInfo && (
-            <div className="w-80">
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-2">Sample Questions</h3>
-                  <div className="space-y-2">
-                    <div
-                      className="text-sm cursor-pointer hover:bg-accent/50 p-2 rounded flex items-center"
-                      onClick={() => setInputValue("Show diabetes medications for Patient X in 2024")}
-                    >
-                      <Search className="h-4 w-4 mr-2 text-primary" />
-                      Show diabetes medications for Patient X in 2024
-                    </div>
-                    <div
-                      className="text-sm cursor-pointer hover:bg-accent/50 p-2 rounded flex items-center"
-                      onClick={() => setInputValue("Find potential drug interactions for Patient Y")}
-                    >
-                      <FileSearch className="h-4 w-4 mr-2 text-primary" />
-                      Find potential drug interactions for Patient Y
-                    </div>
-                    <div
-                      className="text-sm cursor-pointer hover:bg-accent/50 p-2 rounded flex items-center"
-                      onClick={() => setInputValue("Compare current prescription with previous one")}
-                    >
-                      <Search className="h-4 w-4 mr-2 text-primary" />
-                      Compare current prescription with previous one
-                    </div>
+          {/* Sidebar with information */}
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-medium">Assistant Capabilities</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="bg-primary/10 p-2 rounded-full">
+                    <Info className="h-4 w-4 text-primary" />
                   </div>
+                  <div className="text-sm">
+                    <p className="font-medium">Medical History</p>
+                    <p className="text-muted-foreground">
+                      Query patient medication history and treatment records
+                    </p>
+                  </div>
+                </div>
 
-                  <h3 className="font-semibold mt-4 mb-2">AI Capabilities</h3>
-                  <ul className="text-sm space-y-1">
-                    <li className="flex items-start">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 mr-2"></div>
-                      <span>Natural language prescription queries</span>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 mr-2"></div>
-                      <span>Semantic search across patient records</span>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 mr-2"></div>
-                      <span>Medication history analysis</span>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 mr-2"></div>
-                      <span>Drug interaction warnings</span>
-                    </li>
-                  </ul>
+                <div className="flex items-start space-x-3">
+                  <div className="bg-primary/10 p-2 rounded-full">
+                    <Info className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-sm">
+                    <p className="font-medium">Medication Analysis</p>
+                    <p className="text-muted-foreground">
+                      Identify potential drug interactions and side effects
+                    </p>
+                  </div>
+                </div>
 
-                  <h3 className="font-semibold mt-4 mb-2">Privacy Note</h3>
-                  <p className="text-xs text-muted-foreground">
-                    All conversations are encrypted and comply with HIPAA regulations. 
-                    Personal identifiable information is automatically detected and redacted 
-                    in responses to maintain patient confidentiality.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+                <div className="flex items-start space-x-3">
+                  <div className="bg-primary/10 p-2 rounded-full">
+                    <Info className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-sm">
+                    <p className="font-medium">Clinical Guidelines</p>
+                    <p className="text-muted-foreground">
+                      Access evidence-based treatment recommendations
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+              
+              <CardContent className="border-t pt-4">
+                <p className="text-xs text-muted-foreground mb-2">Sample queries:</p>
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start text-xs h-auto py-1.5"
+                    onClick={() => setInput("List all diabetes medications prescribed in 2024")}
+                  >
+                    List all diabetes medications prescribed in 2024
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start text-xs h-auto py-1.5"
+                    onClick={() => setInput("Show possible interactions between Lisinopril and Metformin")}
+                  >
+                    Show possible interactions between Lisinopril and Metformin
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start text-xs h-auto py-1.5"
+                    onClick={() => setInput("Summarize treatment history for patient Sarah Johnson")}
+                  >
+                    Summarize treatment history for patient Sarah Johnson
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4 bg-muted/30">
+              <CardContent className="pt-4">
+                <p className="text-xs">
+                  <span className="font-medium">Note:</span> This assistant is HIPAA-compliant and uses RAG technology to access only authorized patient data. All interactions are logged for compliance purposes.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </AppLayout>

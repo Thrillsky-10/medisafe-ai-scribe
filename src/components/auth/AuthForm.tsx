@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { LockKeyhole, Mail, User } from "lucide-react";
-import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 type AuthFormProps = {
   isLogin: boolean;
@@ -16,21 +16,21 @@ const AuthForm = ({ isLogin, onToggle }: AuthFormProps) => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     try {
-      // This is a mock authentication function - would be replaced with actual auth
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      toast.success(isLogin ? "Successfully logged in" : "Account created successfully");
-      
-      // Navigate to dashboard after successful auth
-      window.location.href = "/dashboard";
+      if (isLogin) {
+        await signIn(email, password);
+      } else {
+        await signUp(email, password, name);
+      }
     } catch (error) {
-      toast.error("Authentication failed, please try again.");
+      // Error is handled in the auth context
+      console.error("Authentication error:", error);
     } finally {
       setIsSubmitting(false);
     }
