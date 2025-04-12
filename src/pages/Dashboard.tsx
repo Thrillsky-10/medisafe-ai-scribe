@@ -1,4 +1,3 @@
-
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import {
   Calendar,
   FileText,
   Plus,
-  Pills,
+  Pill,
   MessageSquare,
   Users,
 } from "lucide-react";
@@ -69,7 +68,7 @@ const Dashboard = () => {
           <Card>
             <CardContent className="p-4 flex items-center space-x-4">
               <div className="bg-primary/10 p-3 rounded-full">
-                <Pills className="h-6 w-6 text-primary" />
+                <Pill className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Active Medications</p>
