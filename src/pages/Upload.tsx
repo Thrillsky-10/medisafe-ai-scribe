@@ -22,6 +22,7 @@ import {
   X,
   CheckCircle2,
   Loader2,
+  FileText
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchPatients } from "@/services/patientService";
@@ -36,6 +37,7 @@ const Upload = () => {
   const [medicationName, setMedicationName] = useState("");
   const [dosage, setDosage] = useState("");
   const [refills, setRefills] = useState(0);
+  const [ocrStatus, setOcrStatus] = useState("");
   const navigate = useNavigate();
   
   // Fetch patients for the dropdown
@@ -92,12 +94,14 @@ const Upload = () => {
     }
 
     setIsUploading(true);
+    setOcrStatus("Uploading document...");
     try {
       // Upload document
       const uploadResult = await uploadPrescriptionDocument(uploadedFile, patientId);
       
       setIsUploading(false);
       setIsProcessing(true);
+      setOcrStatus("Processing with OCR...");
       
       // Create prescription record
       await createPrescription({
@@ -115,9 +119,23 @@ const Upload = () => {
       navigate('/prescriptions');
     } catch (error: any) {
       toast.error(error.message || "Error processing document");
+      setOcrStatus("");
     } finally {
       setIsProcessing(false);
+      setOcrStatus("");
     }
+  };
+
+  // OCR Status component
+  const OcrStatusIndicator = () => {
+    if (!ocrStatus) return null;
+    
+    return (
+      <div className="flex items-center space-x-2 bg-primary/10 p-3 rounded mt-4">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <p className="text-sm font-medium">{ocrStatus}</p>
+      </div>
+    );
   };
 
   return (
@@ -241,7 +259,7 @@ const Upload = () => {
                   <div className="flex items-center justify-between bg-accent/30 p-3 rounded">
                     <div className="flex items-center space-x-3">
                       {uploadedFile.type.includes("pdf") ? (
-                        <File className="h-8 w-8 text-primary" />
+                        <FileText className="h-8 w-8 text-primary" />
                       ) : (
                         <Image className="h-8 w-8 text-primary" />
                       )}
@@ -263,6 +281,8 @@ const Upload = () => {
                   </div>
                 )}
               </div>
+
+              <OcrStatusIndicator />
 
               <div className="bg-muted/30 rounded p-4 border border-muted flex items-start space-x-3">
                 <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />

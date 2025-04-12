@@ -140,12 +140,49 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
       .from('prescription-documents')
       .getPublicUrl(filePath);
 
+    // Process the document with OCR
+    await processPrescriptionDocument(publicUrlData.publicUrl, filePath, patientId);
+
     return {
       path: filePath,
       url: publicUrlData.publicUrl
     };
   } catch (error) {
     console.error('Error uploading prescription document:', error);
+    throw error;
+  }
+}
+
+export async function processPrescriptionDocument(documentUrl: string, documentPath: string, patientId: string) {
+  try {
+    const { data, error } = await supabase.functions.invoke('process-document', {
+      body: {
+        documentUrl,
+        documentPath,
+        patientId,
+      },
+    });
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error processing document with OCR:', error);
+    throw error;
+  }
+}
+
+export async function fetchOcrResults(patientId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('ocr_results')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error fetching OCR results:', error);
     throw error;
   }
 }

@@ -1,6 +1,9 @@
 
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,33 +26,57 @@ import {
   LineChart,
   Line,
 } from "recharts";
+import { Loader2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { 
+  fetchMedicationFrequency, 
+  fetchPrescriptionsByMonth,
+  fetchActiveMedicationsByStatus,
+  fetchOcrAnalytics
+} from "@/services/analyticsService";
 
 const Analytics = () => {
-  // Mock data for charts
-  const medicationFrequencyData = [
-    { name: "Lisinopril", prescriptions: 48 },
-    { name: "Metformin", prescriptions: 42 },
-    { name: "Atorvastatin", prescriptions: 38 },
-    { name: "Levothyroxine", prescriptions: 29 },
-    { name: "Amlodipine", prescriptions: 26 },
-    { name: "Omeprazole", prescriptions: 22 },
-  ];
+  const [year, setYear] = useState("2025");
+  const [patientGroup, setPatientGroup] = useState("all");
+  
+  // Fetch real data from our backend
+  const { 
+    data: medicationFrequencyData = [], 
+    isLoading: isLoadingMedFreq,
+    refetch: refetchMedFreq
+  } = useQuery({
+    queryKey: ['medicationFrequency'],
+    queryFn: fetchMedicationFrequency,
+  });
 
-  const monthlyPrescriptionsData = [
-    { name: "Jan", count: 34 },
-    { name: "Feb", count: 41 },
-    { name: "Mar", count: 38 },
-    { name: "Apr", count: 45 },
-    { name: "May", count: 49 },
-    { name: "Jun", count: 42 },
-    { name: "Jul", count: 37 },
-    { name: "Aug", count: 41 },
-    { name: "Sep", count: 46 },
-    { name: "Oct", count: 51 },
-    { name: "Nov", count: 45 },
-    { name: "Dec", count: 38 },
-  ];
+  const {
+    data: monthlyPrescriptionsData = [],
+    isLoading: isLoadingMonthly,
+    refetch: refetchMonthly
+  } = useQuery({
+    queryKey: ['prescriptionsByMonth'],
+    queryFn: fetchPrescriptionsByMonth,
+  });
 
+  const {
+    data: medicationStatusData = [],
+    isLoading: isLoadingStatus,
+    refetch: refetchStatus
+  } = useQuery({
+    queryKey: ['medicationsByStatus'],
+    queryFn: fetchActiveMedicationsByStatus,
+  });
+  
+  const {
+    data: ocrAnalytics,
+    isLoading: isLoadingOcr,
+    refetch: refetchOcr
+  } = useQuery({
+    queryKey: ['ocrAnalytics'],
+    queryFn: fetchOcrAnalytics,
+  });
+
+  // Prepare data for the medication category chart (still using mock data)
   const medicationCategoryData = [
     { name: "Cardiovascular", value: 124 },
     { name: "Endocrine", value: 87 },
@@ -59,6 +86,53 @@ const Analytics = () => {
   ];
 
   const COLORS = ["#789D3C", "#4A6B2A", "#A3C266", "#3A5B1A", "#C8DBAC"];
+  
+  // Handle refresh
+  const handleRefreshData = async () => {
+    try {
+      await Promise.all([
+        refetchMedFreq(),
+        refetchMonthly(),
+        refetchStatus(),
+        refetchOcr()
+      ]);
+      toast.success("Analytics data refreshed successfully");
+    } catch (error) {
+      toast.error("Failed to refresh analytics data");
+    }
+  };
+
+  // Format OCR insights
+  const getOcrInsights = () => {
+    if (!ocrAnalytics) return [];
+    
+    const insights = [];
+    
+    if (ocrAnalytics.totalDocuments > 0) {
+      insights.push({
+        title: "OCR Processing",
+        description: `Processed ${ocrAnalytics.totalDocuments} documents with average confidence score of ${(ocrAnalytics.avgConfidence * 100).toFixed(1)}%`
+      });
+    }
+    
+    if (ocrAnalytics.fieldExtractionStats) {
+      const { medication, dosage, refills } = ocrAnalytics.fieldExtractionStats;
+      insights.push({
+        title: "Data Extraction Performance",
+        description: `Successfully extracted medication names (${medication}), dosage information (${dosage}), and refill counts (${refills})`
+      });
+    }
+    
+    // Always add one general insight
+    insights.push({
+      title: "Prescription Pattern Change",
+      description: "There has been a 12% increase in Metformin prescriptions compared to the previous quarter, suggesting a rise in diabetes-related treatments."
+    });
+    
+    return insights;
+  };
+  
+  const isLoading = isLoadingMedFreq || isLoadingMonthly || isLoadingStatus || isLoadingOcr;
 
   return (
     <AppLayout>
@@ -66,7 +140,19 @@ const Analytics = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
           <div className="flex space-x-2">
-            <Select defaultValue="2025">
+            <Button 
+              variant="outline" 
+              onClick={handleRefreshData}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Refresh Data
+            </Button>
+            <Select value={year} onValueChange={setYear}>
               <SelectTrigger className="w-32">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
@@ -76,7 +162,7 @@ const Analytics = () => {
                 <SelectItem value="2025">2025</SelectItem>
               </SelectContent>
             </Select>
-            <Select defaultValue="all">
+            <Select value={patientGroup} onValueChange={setPatientGroup}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Patient Group" />
               </SelectTrigger>
@@ -99,33 +185,39 @@ const Analytics = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={medicationFrequencyData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #ddd",
-                    }}
-                  />
-                  <Bar
-                    dataKey="prescriptions"
-                    fill="#789D3C"
-                    name="Prescriptions"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {isLoadingMedFreq ? (
+                <div className="h-full flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={medicationFrequencyData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #ddd",
+                      }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="#789D3C"
+                      name="Prescriptions"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -137,31 +229,37 @@ const Analytics = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={monthlyPrescriptionsData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #ddd",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="count"
-                    stroke="#4A6B2A"
-                    name="Prescriptions"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {isLoadingMonthly ? (
+                <div className="h-full flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={monthlyPrescriptionsData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #ddd",
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#4A6B2A"
+                      name="Prescriptions"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -216,31 +314,20 @@ const Analytics = () => {
               <CardTitle className="text-lg font-medium">AI Insights</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-accent/30 p-4 rounded-md">
-                <h4 className="font-medium">Prescription Pattern Change</h4>
-                <p className="text-sm text-muted-foreground">
-                  There has been a 12% increase in Metformin prescriptions 
-                  compared to the previous quarter, suggesting a rise in 
-                  diabetes-related treatments.
-                </p>
-              </div>
-
-              <div className="bg-accent/30 p-4 rounded-md">
-                <h4 className="font-medium">Potential Drug Interaction Alert</h4>
-                <p className="text-sm text-muted-foreground">
-                  The system detected 5 patients with concurrent prescriptions 
-                  of medications that may have adverse interactions. Review 
-                  recommended.
-                </p>
-              </div>
-
-              <div className="bg-accent/30 p-4 rounded-md">
-                <h4 className="font-medium">Seasonal Prescription Trend</h4>
-                <p className="text-sm text-muted-foreground">
-                  Respiratory medication prescriptions show consistent seasonal 
-                  patterns, with peaks during winter months (Dec-Feb).
-                </p>
-              </div>
+              {isLoadingOcr ? (
+                <div className="h-40 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                getOcrInsights().map((insight, index) => (
+                  <div key={index} className="bg-accent/30 p-4 rounded-md">
+                    <h4 className="font-medium">{insight.title}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {insight.description}
+                    </p>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

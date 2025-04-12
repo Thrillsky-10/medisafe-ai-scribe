@@ -2,8 +2,43 @@
 import { supabase } from '@/lib/supabase';
 import { Patient, PatientStat } from '@/types/database.types';
 
+// Sample patients for development (remove in production)
+const SAMPLE_PATIENTS = [
+  { id: 'P10001', name: 'John Smith', email: 'john@example.com' },
+  { id: 'P10002', name: 'Sarah Johnson', email: 'sarah@example.com' },
+  { id: 'P10003', name: 'Michael Brown', email: 'michael@example.com' },
+  { id: 'P10004', name: 'Emily Davis', email: 'emily@example.com' },
+  { id: 'P10005', name: 'Robert Wilson', email: 'robert@example.com' },
+];
+
+export async function seedPatientsIfEmpty() {
+  try {
+    // Check if patients table is empty
+    const { count, error: countError } = await supabase
+      .from('patients')
+      .select('*', { count: 'exact', head: true });
+    
+    if (countError) throw countError;
+    
+    // Only seed if no patients exist
+    if (count === 0) {
+      const { error } = await supabase
+        .from('patients')
+        .insert(SAMPLE_PATIENTS);
+      
+      if (error) throw error;
+      console.log('Sample patients seeded successfully');
+    }
+  } catch (error) {
+    console.error('Error seeding patients:', error);
+  }
+}
+
 export async function fetchPatients() {
   try {
+    // First try to seed some sample patients if the table is empty
+    await seedPatientsIfEmpty();
+    
     const { data, error } = await supabase
       .from('patients')
       .select('*')

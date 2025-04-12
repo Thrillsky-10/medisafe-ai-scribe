@@ -9,13 +9,119 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      analytics_events: {
+        Row: {
+          created_at: string | null
+          event_data: Json
+          event_type: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_data: Json
+          event_type: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_data?: Json
+          event_type?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ocr_results: {
+        Row: {
+          created_at: string | null
+          document_path: string
+          document_url: string
+          extracted_data: Json
+          id: string
+          patient_id: string | null
+          processed_by: string | null
+          raw_text: string
+        }
+        Insert: {
+          created_at?: string | null
+          document_path: string
+          document_url: string
+          extracted_data: Json
+          id?: string
+          patient_id?: string | null
+          processed_by?: string | null
+          raw_text: string
+        }
+        Update: {
+          created_at?: string | null
+          document_path?: string
+          document_url?: string
+          extracted_data?: Json
+          id?: string
+          patient_id?: string | null
+          processed_by?: string | null
+          raw_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocr_results_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      patients: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_medication_frequency: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          name: string
+          count: number
+          percentage: number
+        }[]
+      }
+      get_medications_by_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          status: string
+          count: number
+        }[]
+      }
+      get_prescriptions_by_month: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          month: string
+          count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
