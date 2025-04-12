@@ -1,11 +1,10 @@
-
 import { supabase } from '@/lib/supabase';
 import { Prescription, PrescriptionStat, MedicationStat } from '@/types/database.types';
 
 export async function fetchPrescriptions(searchTerm = '', status = 'all', sortOrder = 'newest') {
   try {
     let query = supabase
-      .from('prescriptions')
+      .from('ocr_results')
       .select('*');
 
     // Apply status filter if not 'all'
@@ -38,7 +37,7 @@ export async function fetchPrescriptions(searchTerm = '', status = 'all', sortOr
 export async function fetchRecentPrescriptions(limit = 3) {
   try {
     const { data, error } = await supabase
-      .from('prescriptions')
+      .from('ocr_results')
       .select('id, patient_name, medication, prescribed_date')
       .order('prescribed_date', { ascending: false })
       .limit(limit);
@@ -55,33 +54,33 @@ export async function fetchPrescriptionStats(): Promise<PrescriptionStat> {
   try {
     // Get total count
     const { count: total, error: totalError } = await supabase
-      .from('prescriptions')
+      .from('ocr_results')
       .select('*', { count: 'exact', head: true });
 
     if (totalError) throw totalError;
 
     // Get active count
     const { count: active, error: activeError } = await supabase
-      .from('prescriptions')
-      .select('*', { count: 'exact', head: true })
+      .from('ocr_results')
+      .select('*', { count: 'exact', head: true }) //this should have been ocr_results but we need to create status column on that table
       .eq('status', 'active');
 
     if (activeError) throw activeError;
 
     // Get completed count
     const { count: completed, error: completedError } = await supabase
-      .from('prescriptions')
-      .select('*', { count: 'exact', head: true })
+      .from('ocr_results')
+      .select('*', { count: 'exact', head: true }) //this should have been ocr_results but we need to create status column on that table
       .eq('status', 'completed');
 
     if (completedError) throw completedError;
 
     // Get expired count
     const { count: expired, error: expiredError } = await supabase
-      .from('prescriptions')
-      .select('*', { count: 'exact', head: true })
+      .from('ocr_results')
+      .select('*', { count: 'exact', head: true }) //this should have been ocr_results but we need to create status column on that table
       .eq('status', 'expired');
-
+    
     if (expiredError) throw expiredError;
 
     return {
@@ -104,21 +103,6 @@ export async function fetchTopMedications(): Promise<MedicationStat[]> {
     return data || [];
   } catch (error) {
     console.error('Error fetching medication stats:', error);
-    throw error;
-  }
-}
-
-export async function createPrescription(prescription: Omit<Prescription, 'id' | 'created_at'>) {
-  try {
-    const { data, error } = await supabase
-      .from('prescriptions')
-      .insert([prescription])
-      .select();
-
-    if (error) throw error;
-    return data[0];
-  } catch (error) {
-    console.error('Error creating prescription:', error);
     throw error;
   }
 }
