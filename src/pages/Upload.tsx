@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -22,7 +21,8 @@ import {
   X,
   CheckCircle2,
   Loader2,
-  FileText
+  FileText,
+  Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchPatients } from "@/services/patientService";
@@ -38,10 +38,11 @@ const Upload = () => {
   const [dosage, setDosage] = useState("");
   const [refills, setRefills] = useState(0);
   const [ocrStatus, setOcrStatus] = useState("");
+  const [ocrData, setOcrData] = useState<any>(null);
   const navigate = useNavigate();
   
   // Fetch patients for the dropdown
-  const { data: patients = [] } = useQuery({
+  const { data: patients = [], isLoading: isLoadingPatients } = useQuery({
     queryKey: ['patients'],
     queryFn: fetchPatients,
   });
@@ -70,6 +71,27 @@ const Upload = () => {
     setUploadedFile(null);
   };
 
+  // Auto-fill fields from OCR data if available
+  useEffect(() => {
+    if (ocrData?.extracted_data) {
+      const { medication, dosage: extractedDosage, refills: extractedRefills } = ocrData.extracted_data;
+      
+      if (medication && medication !== "Unknown") {
+        setMedicationName(medication);
+      }
+      
+      if (extractedDosage && extractedDosage !== "Unknown") {
+        setDosage(extractedDosage);
+      }
+      
+      if (typeof extractedRefills === 'number') {
+        setRefills(extractedRefills);
+      }
+      
+      toast.success("Form fields auto-filled from document");
+    }
+  }, [ocrData]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -96,12 +118,15 @@ const Upload = () => {
     setIsUploading(true);
     setOcrStatus("Uploading document...");
     try {
-      // Upload document
+      // Upload document and process with OCR
       const uploadResult = await uploadPrescriptionDocument(uploadedFile, patientId);
       
       setIsUploading(false);
       setIsProcessing(true);
       setOcrStatus("Processing with OCR...");
+      
+      // Store OCR data for auto-filling fields
+      setOcrData(uploadResult);
       
       // Create prescription record
       await createPrescription({
@@ -118,6 +143,7 @@ const Upload = () => {
       toast.success("Prescription uploaded and processed successfully");
       navigate('/prescriptions');
     } catch (error: any) {
+      console.error("Upload error:", error);
       toast.error(error.message || "Error processing document");
       setOcrStatus("");
     } finally {
@@ -173,9 +199,10 @@ const Upload = () => {
                   <Select
                     value={patientId}
                     onValueChange={setPatientId}
+                    disabled={isLoadingPatients}
                   >
                     <SelectTrigger id="patientId">
-                      <SelectValue placeholder="Select patient" />
+                      <SelectValue placeholder={isLoadingPatients ? "Loading patients..." : "Select patient"} />
                     </SelectTrigger>
                     <SelectContent>
                       {patients.map((patient) => (
@@ -190,7 +217,15 @@ const Upload = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="medication">Medication Name</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="medication">Medication Name</Label>
+                    {ocrData && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        Auto-filled
+                      </div>
+                    )}
+                  </div>
                   <Input
                     id="medication"
                     placeholder="Enter medication name"
@@ -199,7 +234,15 @@ const Upload = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dosage">Dosage</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="dosage">Dosage</Label>
+                    {ocrData && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        Auto-filled
+                      </div>
+                    )}
+                  </div>
                   <Input
                     id="dosage"
                     placeholder="E.g. 10mg, twice daily"
@@ -211,7 +254,15 @@ const Upload = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="refills">Refills</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="refills">Refills</Label>
+                    {ocrData && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        Auto-filled
+                      </div>
+                    )}
+                  </div>
                   <Input
                     id="refills"
                     type="number"
@@ -326,7 +377,6 @@ const Upload = () => {
           </CardContent>
         </Card>
 
-        {/* Processing information */}
         <Card className="mt-6">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-medium">

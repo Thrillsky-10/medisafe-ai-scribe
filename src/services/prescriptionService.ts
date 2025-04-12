@@ -141,11 +141,18 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
       .getPublicUrl(filePath);
 
     // Process the document with OCR
-    await processPrescriptionDocument(publicUrlData.publicUrl, filePath, patientId);
+    const processingResult = await processPrescriptionDocument(publicUrlData.publicUrl, filePath, patientId);
+    
+    if (!processingResult?.success) {
+      console.error('Document processing failed:', processingResult?.error);
+      throw new Error('Document processing failed. Please try again.');
+    }
 
     return {
       path: filePath,
-      url: publicUrlData.publicUrl
+      url: publicUrlData.publicUrl,
+      ocr_result: processingResult.ocr_result,
+      extracted_data: processingResult.extracted_data
     };
   } catch (error) {
     console.error('Error uploading prescription document:', error);
@@ -163,7 +170,11 @@ export async function processPrescriptionDocument(documentUrl: string, documentP
       },
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error invoking process-document function:', error);
+      throw error;
+    }
+    
     return data;
   } catch (error) {
     console.error('Error processing document with OCR:', error);

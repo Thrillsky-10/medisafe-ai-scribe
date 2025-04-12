@@ -20,6 +20,18 @@ serve(async (req) => {
   }
 
   try {
+    // Use service role key to bypass RLS
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: req.headers.get("Authorization")! },
+        },
+      }
+    );
+    
+    // For auth-related operations, use the client with the user's JWT
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -55,8 +67,8 @@ serve(async (req) => {
       processed_timestamp: new Date().toISOString()
     };
 
-    // Store the OCR results in the database
-    const { data: ocrResult, error: ocrError } = await supabaseClient
+    // Store the OCR results in the database using admin client to bypass RLS
+    const { data: ocrResult, error: ocrError } = await supabaseAdmin
       .from("ocr_results")
       .insert({
         document_path: documentPath,
@@ -72,13 +84,14 @@ serve(async (req) => {
     if (ocrError) {
       console.error("Error storing OCR results:", ocrError);
       return new Response(
-        JSON.stringify({ error: "Failed to store OCR results" }),
+        JSON.stringify({ error: "Failed to store OCR results", details: ocrError }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
 
-    // Log analytics event
-    await supabaseClient
+    // Log analytics event using user's auth context
+    const { data: user } = await supabaseClient.auth.getUser();
+    await supabaseAdmin
       .from("analytics_events")
       .insert({
         event_type: "document_processed",
@@ -88,7 +101,7 @@ serve(async (req) => {
           processing_time_ms: 1250, // Simulated processing time
           extraction_confidence: extractedData.confidence,
         },
-        user_id: (await supabaseClient.auth.getUser()).data.user?.id
+        user_id: user?.user?.id
       });
 
     return new Response(
