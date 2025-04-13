@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -43,7 +42,7 @@ const formSchema = z.object({
   patientId: z.string().min(1, "Please select a patient"),
   medicationName: z.string().min(1, "Please enter medication name"),
   dosage: z.string().min(1, "Please enter dosage"),
-  refills: z.number().min(0, "Refills must be 0 or greater")
+  refills: z.coerce.number().min(0, "Refills must be 0 or greater")
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -570,6 +569,7 @@ const Upload = () => {
                             placeholder="Number of refills"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            value={field.value.toString()}
                           />
                         </FormControl>
                       </FormItem>
