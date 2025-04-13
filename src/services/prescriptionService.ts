@@ -2,11 +2,19 @@
 // src/services/prescriptionService.ts
 
 import { supabase } from "@/lib/supabase";
-import { Database } from "@/types/database.types";
+import { Prescription, MedicationStat } from "@/types/database.types";
 
 // Helper type for the 'prescriptions' table
-type Prescription = Database["public"]["Tables"]["prescriptions"]["Row"];
-type OcrResult = Database["public"]["Tables"]["ocr_results"]["Row"];
+type OcrResult = {
+  id: string;
+  patient_id: string | null;
+  document_url: string;
+  document_path: string;
+  extracted_data: any;
+  raw_text: string;
+  processed_by: string | null;
+  created_at: string | null;
+};
 
 export interface PrescriptionStat {
   total: number;
@@ -217,13 +225,14 @@ export async function processPrescriptionDocument(
       textLength: extractedText?.length || 0
     });
 
+    // Fixed: removed reference to supabase.auth.anon.key
     const response = await fetch(
       "https://vbxrptkhikmzayxnzlvj.supabase.co/functions/v1/process-document", 
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabase.auth.anon.key}`
+          "Authorization": `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZieHJwdGtoaWttemF5eG56bHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0NjUwMTksImV4cCI6MjA2MDA0MTAxOX0.At6OnNihnsZ8VA622IluB4LISJ6SjkFbxkKnpGMe34w`
         },
         body: JSON.stringify({
           documentUrl,

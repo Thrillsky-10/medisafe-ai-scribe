@@ -1,5 +1,4 @@
 
-import { Database } from "@/types/database.types";
 import { supabase } from '@/lib/supabase';
 import { Patient, PatientStat } from '@/types/database.types';
 
@@ -34,9 +33,6 @@ export async function seedPatientsIfEmpty() {
     console.error('Error seeding patients:', error);
   }
 }
-
-// Ensure we have the correct Patient type
-type Patient = Database["public"]["Tables"]["patients"]["Row"];
 
 export async function fetchPatients(): Promise<Patient[]> {
   try {
@@ -87,14 +83,22 @@ export async function fetchPatientStats(): Promise<PatientStat> {
     if (totalError) throw totalError;
 
     // Active patients (patients with active prescriptions)
+    // Fixed: Using a subquery approach instead of .in() with a query builder
+    const { data: activePrescriptions, error: prescriptionsError } = await supabase
+      .from('prescriptions')
+      .select('patient_id')
+      .eq('status', 'active');
+
+    if (prescriptionsError) throw prescriptionsError;
+    
+    // Get distinct patient IDs from active prescriptions
+    const activePatientIds = [...new Set(activePrescriptions.map(p => p.patient_id))];
+    
+    // Count active patients
     const { count: active, error: activeError } = await supabase
       .from('patients')
-      .select('id', { count: 'exact' })
-      .in('id', supabase
-        .from('prescriptions')
-        .select('patient_id')
-        .eq('status', 'active')
-      );
+      .select('id', { count: 'exact', head: true })
+      .in('id', activePatientIds);
 
     if (activeError) throw activeError;
 
