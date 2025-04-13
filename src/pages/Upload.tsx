@@ -36,6 +36,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Form schema for validation
 const formSchema = z.object({
@@ -50,6 +51,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 const Upload = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrStatus, setOcrStatus] = useState("");
@@ -83,13 +85,23 @@ const Upload = () => {
   // Get patient name from ID
   const selectedPatient = patients.find((p) => p.id === form.watch("patientId"));
 
+  // Create a file URL for preview
+  useEffect(() => {
+    if (uploadedFile) {
+      const url = URL.createObjectURL(uploadedFile);
+      setFileUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [uploadedFile]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setUploadedFile(file);
       
       // If we have a file and a patient is selected, trigger OCR processing
-      if (e.target.files[0] && form.getValues("patientId")) {
-        performOcr(e.target.files[0]);
+      if (file && form.getValues("patientId")) {
+        performOcr(file);
       }
     }
   };
@@ -101,17 +113,19 @@ const Upload = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setUploadedFile(e.dataTransfer.files[0]);
+      const file = e.dataTransfer.files[0];
+      setUploadedFile(file);
       
       // If we have a file and a patient is selected, trigger OCR processing
-      if (e.dataTransfer.files[0] && form.getValues("patientId")) {
-        performOcr(e.dataTransfer.files[0]);
+      if (file && form.getValues("patientId")) {
+        performOcr(file);
       }
     }
   };
 
   const removeFile = () => {
     setUploadedFile(null);
+    setFileUrl(null);
     setOcrData(null);
     setPreviewData(null);
   };
@@ -119,21 +133,55 @@ const Upload = () => {
   // Perform OCR on the uploaded file
   const performOcr = async (file: File) => {
     setOcrStatus("Extracting text from document...");
+    setPreviewData(null);
+    
     try {
-      // Create a worker
-      const worker = await createWorker("eng");
-      
-      // Recognize text
-      const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
-      
-      setOcrStatus("Text extracted, processing data...");
-      
-      // Process the extracted text
-      handleExtractedText(text);
+      // For images, use Tesseract.js
+      if (file.type.startsWith('image/')) {
+        // Create file URL for Tesseract
+        const imageUrl = URL.createObjectURL(file);
+        
+        try {
+          // Initialize worker with language and options
+          const worker = await createWorker('eng', {
+            logger: m => console.log(m),
+            errorHandler: err => console.error('Tesseract error:', err)
+          });
+          
+          // Configure recognizer
+          await worker.setParameters({
+            tessedit_ocr_engine_mode: 1, // Use LSTM only
+            preserve_interword_spaces: 1
+          });
+          
+          // Recognize text
+          const { data } = await worker.recognize(imageUrl);
+          
+          // Clean up
+          URL.revokeObjectURL(imageUrl);
+          await worker.terminate();
+          
+          if (data && data.text) {
+            handleExtractedText(data.text);
+          } else {
+            throw new Error('No text was extracted from the image');
+          }
+        } catch (ocrError) {
+          console.error("OCR Error:", ocrError);
+          toast.error("Could not extract text from the image. Please try another file or enter information manually.");
+          setOcrStatus("");
+        }
+      } else if (file.type === 'application/pdf') {
+        // For PDF files, we'll use the manually entered data since client-side PDF text extraction is complex
+        toast.info("PDF processing: Please enter the prescription details manually.");
+        setOcrStatus("");
+      } else {
+        toast.warning("Unsupported file type. Please upload an image (JPG, PNG) or PDF.");
+        setOcrStatus("");
+      }
     } catch (error) {
-      console.error("OCR Error:", error);
-      toast.error("Error extracting text from document.");
+      console.error("OCR Processing Error:", error);
+      toast.error("Error processing the document. Please try again or enter information manually.");
       setOcrStatus("");
     }
   };
@@ -141,43 +189,52 @@ const Upload = () => {
   // Handle the extracted text from OCR
   const handleExtractedText = async (text: string) => {
     try {
+      console.log("Extracted text:", text);
+      
       // Auto-fill form fields based on OCR
       const medicationMatch = text.match(/medication:?\s*([\w\s\-]+)/i) || 
                              text.match(/med:?\s*([\w\s\-]+)/i) ||
-                             text.match(/prescribed:?\s*([\w\s\-]+)/i);
+                             text.match(/prescribed:?\s*([\w\s\-]+)/i) ||
+                             text.match(/drug:?\s*([\w\s\-]+)/i);
       
       const dosageMatch = text.match(/dosage:?\s*([\w\s\.\/\-]+)/i) || 
                           text.match(/dose:?\s*([\w\s\.\/\-]+)/i) ||
-                          text.match(/take:?\s*([\w\s\.\/\-]+)/i);
+                          text.match(/take:?\s*([\w\s\.\/\-]+)/i) ||
+                          text.match(/daily:?\s*([\w\s\.\/\-]+)/i);
       
       const refillsMatch = text.match(/refill[s]?:?\s*(\d+)/i) || 
-                           text.match(/repeats:?\s*(\d+)/i);
+                           text.match(/repeats:?\s*(\d+)/i) ||
+                           text.match(/repeat:?\s*(\d+)/i);
       
       // Update form values if matches found
-      if (medicationMatch && medicationMatch[1].trim() !== "Unknown") {
-        form.setValue("medicationName", medicationMatch[1].trim());
+      const medicationValue = medicationMatch && medicationMatch[1].trim();
+      const dosageValue = dosageMatch && dosageMatch[1].trim();
+      const refillsValue = refillsMatch ? parseInt(refillsMatch[1]) : 0;
+      
+      if (medicationValue && medicationValue !== "Unknown") {
+        form.setValue("medicationName", medicationValue);
       }
       
-      if (dosageMatch && dosageMatch[1].trim() !== "Unknown") {
-        form.setValue("dosage", dosageMatch[1].trim());
+      if (dosageValue && dosageValue !== "Unknown") {
+        form.setValue("dosage", dosageValue);
       }
       
       if (refillsMatch) {
-        form.setValue("refills", parseInt(refillsMatch[1]));
+        form.setValue("refills", refillsValue);
       }
       
       // Set preview data
       setPreviewData({
-        medication: medicationMatch ? medicationMatch[1].trim() : "Not detected",
-        dosage: dosageMatch ? dosageMatch[1].trim() : "Not detected",
-        refills: refillsMatch ? parseInt(refillsMatch[1]) : 0,
+        medication: medicationValue || "Not detected",
+        dosage: dosageValue || "Not detected",
+        refills: refillsValue,
       });
       
       setOcrStatus("");
       toast.success("Document processed successfully!");
     } catch (error) {
       console.error("Error processing text:", error);
-      toast.error("Error processing document text.");
+      toast.error("Error extracting information from document. Please enter details manually.");
       setOcrStatus("");
     }
   };
@@ -203,39 +260,56 @@ const Upload = () => {
       setIsUploading(false);
       setIsProcessing(true);
       
-      // Get OCR text from the file if not already processed
-      let extractedText = "";
-      if (!previewData) {
-        try {
-          const worker = await createWorker("eng");
-          const { data: { text } } = await worker.recognize(uploadedFile);
-          await worker.terminate();
-          extractedText = text;
-        } catch (ocrError) {
-          console.error("OCR Error:", ocrError);
-          toast.error("OCR processing failed.");
-          setIsProcessing(false);
-          setOcrStatus("");
-          return;
+      // Use the form values directly for the prescription data
+      const prescription = await createPrescription({
+        patient_id: values.patientId,
+        medication: values.medicationName,
+        dosage: values.dosage,
+        refills: values.refills,
+        document_url: uploadResult.url
+      });
+      
+      if (!prescription) {
+        throw new Error("Failed to create prescription");
+      }
+      
+      // Process the document with the edge function (for future AI analysis)
+      try {
+        // Get OCR text from the file if not already processed
+        let extractedText = "";
+        if (previewData) {
+          // Create a simple text representation of the extracted data
+          extractedText = `Medication: ${previewData.medication}\nDosage: ${previewData.dosage}\nRefills: ${previewData.refills}`;
+        } else if (uploadedFile.type.startsWith('image/')) {
+          // For images, create a URL for Tesseract
+          const imageUrl = URL.createObjectURL(uploadedFile);
+          try {
+            const worker = await createWorker("eng");
+            const { data } = await worker.recognize(imageUrl);
+            extractedText = data.text;
+            await worker.terminate();
+            URL.revokeObjectURL(imageUrl);
+          } catch (ocrError) {
+            console.error("OCR Error:", ocrError);
+            extractedText = "OCR processing failed";
+          }
         }
+        
+        // Send to Supabase Edge Function
+        const processResult = await processPrescriptionDocument(
+          uploadResult.url,
+          uploadResult.path,
+          values.patientId,
+          extractedText
+        );
+        
+        console.log("Document processing result:", processResult);
+      } catch (processError) {
+        // Don't fail if the edge function processing fails
+        console.error("Edge function error:", processError);
       }
       
-      // Process the document with the edge function
-      const processResult = await processPrescriptionDocument(
-        uploadResult.url,
-        uploadResult.path,
-        values.patientId,
-        extractedText
-      );
-      
-      if (!processResult?.success) {
-        throw new Error(processResult?.error || "Document processing failed");
-      }
-      
-      // Store OCR data for reference
-      setOcrData(processResult);
-      
-      toast.success("Prescription uploaded and processed successfully");
+      toast.success("Prescription uploaded and created successfully");
       navigate("/prescriptions");
     } catch (error: any) {
       console.error("Upload error:", error);
@@ -296,6 +370,39 @@ const Upload = () => {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // File Preview component
+  const FilePreview = () => {
+    if (!fileUrl || !uploadedFile) return null;
+    
+    return (
+      <Card className="mt-4 overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-medium">Document Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {uploadedFile.type.startsWith('image/') && (
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md border">
+              <img 
+                src={fileUrl} 
+                alt="Document preview"
+                className="object-contain w-full h-full"
+              />
+            </div>
+          )}
+          
+          {uploadedFile.type === 'application/pdf' && (
+            <Alert>
+              <FileText className="h-4 w-4" />
+              <AlertDescription>
+                PDF preview not available. The file will be uploaded and processed.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
     );
@@ -488,7 +595,7 @@ const Upload = () => {
                   ) : (
                     <div className="flex items-center justify-between bg-accent/30 p-3 rounded">
                       <div className="flex items-center space-x-3">
-                        {uploadedFile.type.includes("pdf") ? (
+                        {uploadedFile.type.includes('pdf') ? (
                           <FileText className="h-8 w-8 text-primary" />
                         ) : (
                           <Image className="h-8 w-8 text-primary" />
@@ -515,6 +622,7 @@ const Upload = () => {
                 </div>
 
                 <OcrStatusIndicator />
+                <FilePreview />
                 <DocumentPreview />
 
                 <div className="bg-muted/30 rounded p-4 border border-muted flex items-start space-x-3">

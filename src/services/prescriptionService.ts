@@ -1,3 +1,4 @@
+
 // src/services/prescriptionService.ts
 
 import { supabase } from "@/lib/supabase";
@@ -35,15 +36,20 @@ export interface CreatePrescriptionData {
 
 export async function createPrescription(data: CreatePrescriptionData): Promise<Prescription | null> {
   try {
+    // Set default values if not provided
+    const prescriptionData = {
+      patient_id: data.patient_id,
+      medication: data.medication,
+      dosage: data.dosage,
+      refills: data.refills,
+      document_url: data.document_url || null,
+      status: data.status || 'active',
+      prescribed_date: data.prescribed_date || new Date().toISOString().split('T')[0],
+    };
+
     const { data: prescription, error } = await supabase
       .from("prescriptions")
-      .insert({
-        patient_id: data.patient_id,
-        medication: data.medication,
-        dosage: data.dosage,
-        refills: data.refills,
-        document_url: data.document_url,
-      })
+      .insert(prescriptionData)
       .select()
       .single();
 
@@ -167,30 +173,56 @@ export async function fetchTopMedications(): Promise<MedicationStat[]> {
 
 export async function uploadPrescriptionDocument(file: File, patientId: string) {
   try {
+    // Check for valid file
+    if (!file || file.size === 0) {
+      throw new Error('Invalid file provided');
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('File type not supported. Please upload a JPG, PNG, or PDF file.');
+    }
+
+    // Validate file size (10MB max)
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_SIZE) {
+      throw new Error('File too large. Maximum size is 10MB.');
+    }
+
+    // Create filename with proper extension
     const fileExt = file.name.split('.').pop();
     const fileName = `${patientId}_${Date.now()}.${fileExt}`;
     const filePath = `prescriptions/${fileName}`;
 
-    // Create the bucket if it doesn't exist
+    // Check if bucket exists and create if needed
     const { data: buckets } = await supabase.storage.listBuckets();
     if (!buckets?.find(b => b.name === 'prescription-documents')) {
-      await supabase.storage.createBucket('prescription-documents', {
-        public: false,
-        fileSizeLimit: 10485760, // 10MB
-      });
+      try {
+        await supabase.storage.createBucket('prescription-documents', {
+          public: false,
+          fileSizeLimit: 10485760, // 10MB
+        });
+      } catch (bucketError: any) {
+        // If bucket already exists or permission error, continue
+        console.warn('Bucket creation warning:', bucketError.message);
+      }
     }
 
     // Upload the file
     const { data, error } = await supabase.storage
       .from('prescription-documents')
-      .upload(filePath, file);
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
 
     if (error) {
       console.error('Upload error:', error);
       throw error;
     }
 
-    // Get public URL (or protected URL depending on your needs)
+    // Get public URL
     const { data: publicUrlData } = supabase.storage
       .from('prescription-documents')
       .getPublicUrl(filePath);
@@ -219,7 +251,7 @@ export async function processPrescriptionDocument(
       textLength: extractedText?.length || 0
     });
 
-    // Fixed: removed reference to supabase.auth.anon.key
+    // Fixed: using hardcoded anon key
     const response = await fetch(
       "https://vbxrptkhikmzayxnzlvj.supabase.co/functions/v1/process-document", 
       {
