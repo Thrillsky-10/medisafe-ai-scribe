@@ -251,14 +251,17 @@ export async function processPrescriptionDocument(
       textLength: extractedText?.length || 0
     });
 
-    // Fixed: using hardcoded anon key
+    // Use Supabase project URL and anon key
+    const supabaseUrl = "https://vbxrptkhikmzayxnzlvj.supabase.co";
+    const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZieHJwdGtoaWttemF5eG56bHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0NjUwMTksImV4cCI6MjA2MDA0MTAxOX0.At6OnNihnsZ8VA622IluB4LISJ6SjkFbxkKnpGMe34w";
+
     const response = await fetch(
-      "https://vbxrptkhikmzayxnzlvj.supabase.co/functions/v1/process-document", 
+      `${supabaseUrl}/functions/v1/process-document`, 
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZieHJwdGtoaWttemF5eG56bHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0NjUwMTksImV4cCI6MjA2MDA0MTAxOX0.At6OnNihnsZ8VA622IluB4LISJ6SjkFbxkKnpGMe34w`
+          "Authorization": `Bearer ${supabaseAnonKey}`
         },
         body: JSON.stringify({
           documentUrl,

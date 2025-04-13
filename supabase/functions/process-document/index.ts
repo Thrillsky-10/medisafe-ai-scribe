@@ -22,34 +22,70 @@ interface ProcessDocumentPayload {
 }
 
 /**
- * Extracts structured data from text using a simple rule-based approach.
- * In a real application, this should be replaced with NLP techniques.
+ * Extracts structured data from text using a more comprehensive rule-based approach.
  * @param {string} text - The text to extract data from.
  * @returns {object} - An object containing extracted data.
  */
 function extractData(text: string) {
-  // More robust regex patterns for better extraction
+  // More comprehensive regex patterns for better extraction
   const medicationMatch = text.match(/medication:?\s*([\w\s\-]+)/i) || 
-                          text.match(/med:?\s*([\w\s\-]+)/i) ||
-                          text.match(/prescribed:?\s*([\w\s\-]+)/i);
+                         text.match(/med:?\s*([\w\s\-]+)/i) ||
+                         text.match(/prescribed:?\s*([\w\s\-]+)/i) ||
+                         text.match(/drug:?\s*([\w\s\-]+)/i) ||
+                         text.match(/rx:?\s*([\w\s\-]+)/i);
   
   const dosageMatch = text.match(/dosage:?\s*([\w\s\.\/\-]+)/i) || 
-                      text.match(/dose:?\s*([\w\s\.\/\-]+)/i) ||
-                      text.match(/take:?\s*([\w\s\.\/\-]+)/i);
+                     text.match(/dose:?\s*([\w\s\.\/\-]+)/i) ||
+                     text.match(/take:?\s*([\w\s\.\/\-]+)/i) ||
+                     text.match(/sig:?\s*([\w\s\.\/\-]+)/i) ||
+                     text.match(/(\d+\s*mg|\d+\s*ml|\d+\s*tablet|\d+\s*cap|once daily|twice daily|three times daily|every \d+ hours)/i);
   
   const refillsMatch = text.match(/refill[s]?:?\s*(\d+)/i) || 
-                       text.match(/repeats:?\s*(\d+)/i);
+                      text.match(/repeats:?\s*(\d+)/i) ||
+                      text.match(/repeat:?\s*(\d+)/i) ||
+                      text.match(/qty:?\s*(\d+)/i);
   
   const patientNameMatch = text.match(/patient\s*name:?\s*([\w\s\.]+)/i) || 
-                          text.match(/name:?\s*([\w\s\.]+)/i);
+                          text.match(/name:?\s*([\w\s\.]+)/i) ||
+                          text.match(/patient:?\s*([\w\s\.]+)/i);
   
-  const dateMatch = text.match(/date:?\s*([\w\s\.\/\-]+)/i);
+  const dateMatch = text.match(/date:?\s*([\w\s\.\/\-]+)/i) ||
+                   text.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/);
+
+  // Look for common medication names in the text when no medication is found
+  let medicationName = medicationMatch ? medicationMatch[1].trim() : null;
+  
+  if (!medicationName) {
+    const commonMeds = [
+      'Lisinopril', 'Metformin', 'Amlodipine', 'Metoprolol', 'Atorvastatin',
+      'Levothyroxine', 'Simvastatin', 'Omeprazole', 'Losartan', 'Albuterol',
+      'Gabapentin', 'Hydrochlorothiazide', 'Sertraline', 'Amoxicillin'
+    ];
+    
+    for (const med of commonMeds) {
+      if (text.toLowerCase().includes(med.toLowerCase())) {
+        medicationName = med;
+        break;
+      }
+    }
+  }
+
+  // Calculate confidence score based on how many fields were successfully extracted
+  let extractedFields = 0;
+  let totalFields = 4; // medication, dosage, refills, date
+  
+  if (medicationName) extractedFields++;
+  if (dosageMatch) extractedFields++;
+  if (refillsMatch) extractedFields++;
+  if (dateMatch) extractedFields++;
+  
+  const confidence = extractedFields / totalFields;
 
   return {
-    medication: medicationMatch ? medicationMatch[1].trim() : "Unknown",
+    medication: medicationName || "Unknown",
     dosage: dosageMatch ? dosageMatch[1].trim() : "Unknown",
     refills: refillsMatch ? parseInt(refillsMatch[1]) : 0,
-    confidence: 0.75, // Placeholder confidence score
+    confidence: confidence,
     patient_name: patientNameMatch ? patientNameMatch[1].trim() : "Unknown",
     date: dateMatch ? dateMatch[1].trim() : new Date().toLocaleDateString(),
   };
@@ -80,6 +116,7 @@ serve(async (req) => {
     console.log(`Processing document for patient: ${patientId}`);
     console.log(`Document path: ${documentPath}`);
     console.log(`Text length: ${extractedText.length} characters`);
+    console.log("Extracted text sample:", extractedText.substring(0, 200));
 
     // Extract data from the OCR output
     const extractedData = extractData(extractedText);
@@ -126,6 +163,8 @@ serve(async (req) => {
         dosage: extractedData.dosage,
         refills: extractedData.refills,
         ocr_result_id: ocrResult.id,
+        prescribed_date: extractedData.date !== "Unknown" ? extractedData.date : new Date().toLocaleDateString(),
+        status: 'active'
       })
       .select()
       .single();

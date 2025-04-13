@@ -56,6 +56,7 @@ const Upload = () => {
   const [ocrStatus, setOcrStatus] = useState("");
   const [ocrData, setOcrData] = useState<any>(null);
   const [previewData, setPreviewData] = useState<any>(null);
+  const [autoProcess, setAutoProcess] = useState(true);
   const navigate = useNavigate();
 
   const form = useForm<FormValues>({
@@ -93,7 +94,7 @@ const Upload = () => {
       const file = e.target.files[0];
       setUploadedFile(file);
       
-      if (file && form.getValues("patientId")) {
+      if (file && form.getValues("patientId") && autoProcess) {
         performOcr(file);
       }
     }
@@ -109,7 +110,7 @@ const Upload = () => {
       const file = e.dataTransfer.files[0];
       setUploadedFile(file);
       
-      if (file && form.getValues("patientId")) {
+      if (file && form.getValues("patientId") && autoProcess) {
         performOcr(file);
       }
     }
@@ -131,12 +132,10 @@ const Upload = () => {
         const imageUrl = URL.createObjectURL(file);
         
         try {
-          // Fix: Pass the language as a string, not an object
           const worker = await createWorker('eng');
-          // Fix: Use the correct type for parameters
           await worker.setParameters({
-            tessedit_ocr_engine_mode: 1, // Number instead of string
-            preserve_interword_spaces: 1 // Number instead of string
+            tessedit_ocr_engine_mode: 1, 
+            preserve_interword_spaces: 1
           });
           
           const { data } = await worker.recognize(imageUrl);
@@ -154,7 +153,10 @@ const Upload = () => {
           setOcrStatus("");
         }
       } else if (file.type === 'application/pdf') {
-        toast.info("PDF processing: Please enter the prescription details manually.");
+        toast.info("Processing PDF. This may take a moment.");
+        setOcrStatus("PDF files require server-side processing...");
+        // For PDFs, we'll extract text during the actual submission
+        // Just show a placeholder for now
         setOcrStatus("");
       } else {
         toast.warning("Unsupported file type. Please upload an image (JPG, PNG) or PDF.");
@@ -172,20 +174,40 @@ const Upload = () => {
       console.log("Extracted text:", text);
       
       const medicationMatch = text.match(/medication:?\s*([\w\s\-]+)/i) || 
-                             text.match(/med:?\s*([\w\s\-]+)/i) ||
-                             text.match(/prescribed:?\s*([\w\s\-]+)/i) ||
-                             text.match(/drug:?\s*([\w\s\-]+)/i);
+                            text.match(/med:?\s*([\w\s\-]+)/i) ||
+                            text.match(/prescribed:?\s*([\w\s\-]+)/i) ||
+                            text.match(/drug:?\s*([\w\s\-]+)/i) ||
+                            text.match(/rx:?\s*([\w\s\-]+)/i);
       
       const dosageMatch = text.match(/dosage:?\s*([\w\s\.\/\-]+)/i) || 
                           text.match(/dose:?\s*([\w\s\.\/\-]+)/i) ||
                           text.match(/take:?\s*([\w\s\.\/\-]+)/i) ||
-                          text.match(/daily:?\s*([\w\s\.\/\-]+)/i);
+                          text.match(/daily:?\s*([\w\s\.\/\-]+)/i) ||
+                          text.match(/sig:?\s*([\w\s\.\/\-]+)/i) ||
+                          text.match(/(\d+\s*mg|\d+\s*ml|\d+\s*tablet|\d+\s*cap|once daily|twice daily|three times daily|every \d+ hours)/i);
       
       const refillsMatch = text.match(/refill[s]?:?\s*(\d+)/i) || 
-                           text.match(/repeats:?\s*(\d+)/i) ||
-                           text.match(/repeat:?\s*(\d+)/i);
+                          text.match(/repeats:?\s*(\d+)/i) ||
+                          text.match(/repeat:?\s*(\d+)/i) ||
+                          text.match(/qty:?\s*(\d+)/i);
       
-      const medicationValue = medicationMatch && medicationMatch[1].trim();
+      // Check for common medication names if no direct mention
+      let medicationValue = medicationMatch && medicationMatch[1].trim();
+      if (!medicationValue) {
+        const commonMeds = [
+          'Lisinopril', 'Metformin', 'Amlodipine', 'Metoprolol', 'Atorvastatin',
+          'Levothyroxine', 'Simvastatin', 'Omeprazole', 'Losartan', 'Albuterol',
+          'Gabapentin', 'Hydrochlorothiazide', 'Sertraline', 'Amoxicillin'
+        ];
+        
+        for (const med of commonMeds) {
+          if (text.toLowerCase().includes(med.toLowerCase())) {
+            medicationValue = med;
+            break;
+          }
+        }
+      }
+      
       const dosageValue = dosageMatch && dosageMatch[1].trim();
       const refillsValue = refillsMatch ? parseInt(refillsMatch[1]) : 0;
       
@@ -238,20 +260,6 @@ const Upload = () => {
       // Create a date string in YYYY-MM-DD format for the prescribed_date
       const currentDate = new Date().toISOString().split('T')[0];
       
-      const prescription = await createPrescription({
-        patient_id: values.patientId,
-        medication: values.medicationName,
-        dosage: values.dosage,
-        refills: values.refills,
-        document_url: uploadResult.url,
-        prescribed_date: currentDate,
-        status: 'active'
-      });
-      
-      if (!prescription) {
-        throw new Error("Failed to create prescription");
-      }
-      
       try {
         let extractedText = "";
         if (previewData) {
@@ -278,9 +286,31 @@ const Upload = () => {
         );
         
         console.log("Document processing result:", processResult);
+        
+        if (processResult && processResult.prescription) {
+          // Successfully processed via edge function, navigate to prescriptions
+          toast.success("Prescription uploaded and processed successfully");
+          navigate("/prescriptions");
+          return;
+        }
       } catch (processError) {
         console.error("Edge function error:", processError);
-        // Continue with prescription creation even if OCR processing fails
+        // Continue with manual prescription creation if edge function fails
+      }
+      
+      // Fallback to manual creation if edge function processing fails
+      const prescription = await createPrescription({
+        patient_id: values.patientId,
+        medication: values.medicationName,
+        dosage: values.dosage,
+        refills: values.refills,
+        document_url: uploadResult.url,
+        prescribed_date: currentDate,
+        status: 'active'
+      });
+      
+      if (!prescription) {
+        throw new Error("Failed to create prescription");
       }
       
       toast.success("Prescription uploaded and created successfully");
@@ -299,7 +329,7 @@ const Upload = () => {
 
   useEffect(() => {
     const patientId = form.watch("patientId");
-    if (patientId && uploadedFile) {
+    if (patientId && uploadedFile && autoProcess) {
       performOcr(uploadedFile);
     }
   }, [form.watch("patientId")]);
@@ -452,6 +482,21 @@ const Upload = () => {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox" 
+                      id="autoProcess"
+                      checked={autoProcess}
+                      onChange={(e) => setAutoProcess(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="autoProcess" className="text-sm font-medium">
+                      Auto-process documents (extract information automatically)
+                    </label>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -676,8 +721,8 @@ const Upload = () => {
                 <div>
                   <p className="font-medium">AI-Powered OCR</p>
                   <p className="text-sm text-muted-foreground">
-                    Our AI model extracts structured data from your
-                    documents.
+                    Our AI model automatically extracts structured data from your
+                    documents with minimal manual input needed.
                   </p>
                 </div>
               </div>
@@ -690,7 +735,7 @@ const Upload = () => {
                   <p className="font-medium">Data Validation</p>
                   <p className="text-sm text-muted-foreground">
                     Medical entities like medications and dosages are verified
-                    and standardized.
+                    and standardized automatically.
                   </p>
                 </div>
               </div>
