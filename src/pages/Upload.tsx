@@ -569,7 +569,7 @@ const Upload = () => {
                             placeholder="Number of refills"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                            value={field.value.toString()}
+                            value={field.value}
                           />
                         </FormControl>
                       </FormItem>
