@@ -1,3 +1,4 @@
+
 import { Database } from "@/types/database.types";
 import { supabase } from '@/lib/supabase';
 import { Patient, PatientStat } from '@/types/database.types';
@@ -34,19 +35,47 @@ export async function seedPatientsIfEmpty() {
   }
 }
 
+// Ensure we have the correct Patient type
 type Patient = Database["public"]["Tables"]["patients"]["Row"];
 
 export async function fetchPatients(): Promise<Patient[]> {
-  const { data, error } = await supabase.from("patients").select("*");
+  try {
+    const { data, error } = await supabase
+      .from("patients")
+      .select("*")
+      .order("name");
 
-  if (error) {
-    console.error("Error fetching patients:", error);
+    if (error) {
+      console.error("Error fetching patients:", error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("Error in fetchPatients:", error);
     throw error;
   }
-
-  return data || [];
 }
 
+export async function fetchPatientById(patientId: string): Promise<Patient | null> {
+  try {
+    const { data, error } = await supabase
+      .from("patients")
+      .select("*")
+      .eq("id", patientId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching patient:", error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error in fetchPatientById:", error);
+    throw error;
+  }
+}
 
 export async function fetchPatientStats(): Promise<PatientStat> {
   try {
@@ -58,7 +87,14 @@ export async function fetchPatientStats(): Promise<PatientStat> {
     if (totalError) throw totalError;
 
     // Active patients (patients with active prescriptions)
-    const { count: active, error: activeError } = await supabase.rpc('get_active_patients_count');
+    const { count: active, error: activeError } = await supabase
+      .from('patients')
+      .select('id', { count: 'exact' })
+      .in('id', supabase
+        .from('prescriptions')
+        .select('patient_id')
+        .eq('status', 'active')
+      );
 
     if (activeError) throw activeError;
 

@@ -95,6 +95,57 @@ export type Database = {
         }
         Relationships: []
       }
+      prescriptions: {
+        Row: {
+          created_at: string | null
+          document_path: string | null
+          document_url: string | null
+          dosage: string | null
+          id: string
+          medication: string | null
+          ocr_result_id: string | null
+          patient_id: string | null
+          refills: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_path?: string | null
+          document_url?: string | null
+          dosage?: string | null
+          id?: string
+          medication?: string | null
+          ocr_result_id?: string | null
+          patient_id?: string | null
+          refills?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          document_path?: string | null
+          document_url?: string | null
+          dosage?: string | null
+          id?: string
+          medication?: string | null
+          ocr_result_id?: string | null
+          patient_id?: string | null
+          refills?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prescriptions_ocr_result_id_fkey"
+            columns: ["ocr_result_id"]
+            isOneToOne: false
+            referencedRelation: "ocr_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prescriptions_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

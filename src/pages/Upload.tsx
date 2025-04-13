@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -15,35 +16,63 @@ import {
 } from "@/components/ui/select";
 import {
   AlertCircle,
-  File,
+  FileText,
   Image,
   Upload as UploadIcon,
   X,
   CheckCircle2,
   Loader2,
-  FileText,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { fetchPatients } from "@/services/patientService";
+import { fetchPatients, seedPatientsIfEmpty } from "@/services/patientService";
 import {
   uploadPrescriptionDocument,
+  processPrescriptionDocument,
   createPrescription,
 } from "@/services/prescriptionService";
 import { createWorker } from "tesseract.js";
+import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+// Form schema for validation
+const formSchema = z.object({
+  docType: z.string().min(1, "Please select a document type"),
+  patientId: z.string().min(1, "Please select a patient"),
+  medicationName: z.string().min(1, "Please enter medication name"),
+  dosage: z.string().min(1, "Please enter dosage"),
+  refills: z.number().min(0, "Refills must be 0 or greater")
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 const Upload = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [docType, setDocType] = useState("prescription");
-  const [patientId, setPatientId] = useState("");
-  const [medicationName, setMedicationName] = useState("");
-  const [dosage, setDosage] = useState("");
-  const [refills, setRefills] = useState(0);
   const [ocrStatus, setOcrStatus] = useState("");
   const [ocrData, setOcrData] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
   const navigate = useNavigate();
+
+  // Initialize form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      docType: "prescription",
+      patientId: "",
+      medicationName: "",
+      dosage: "",
+      refills: 0
+    }
+  });
+
+  // Seed patients on component mount
+  useEffect(() => {
+    seedPatientsIfEmpty();
+  }, []);
 
   // Fetch patients for the dropdown
   const { data: patients = [], isLoading: isLoadingPatients } = useQuery({
@@ -52,11 +81,16 @@ const Upload = () => {
   });
 
   // Get patient name from ID
-  const selectedPatient = patients.find((p) => p.id === patientId);
+  const selectedPatient = patients.find((p) => p.id === form.watch("patientId"));
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setUploadedFile(e.target.files[0]);
+      
+      // If we have a file and a patient is selected, trigger OCR processing
+      if (e.target.files[0] && form.getValues("patientId")) {
+        performOcr(e.target.files[0]);
+      }
     }
   };
 
@@ -68,135 +102,158 @@ const Upload = () => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setUploadedFile(e.dataTransfer.files[0]);
+      
+      // If we have a file and a patient is selected, trigger OCR processing
+      if (e.dataTransfer.files[0] && form.getValues("patientId")) {
+        performOcr(e.dataTransfer.files[0]);
+      }
     }
   };
 
   const removeFile = () => {
     setUploadedFile(null);
+    setOcrData(null);
+    setPreviewData(null);
   };
 
-  // Auto-fill fields from OCR data if available
-  useEffect(() => {
-    if (ocrData?.extracted_data) {
-      const {
-        medication,
-        dosage: extractedDosage,
-        refills: extractedRefills,
-      } = ocrData.extracted_data;
+  // Perform OCR on the uploaded file
+  const performOcr = async (file: File) => {
+    setOcrStatus("Extracting text from document...");
+    try {
+      // Create a worker
+      const worker = await createWorker("eng");
+      
+      // Recognize text
+      const { data: { text } } = await worker.recognize(file);
+      await worker.terminate();
+      
+      setOcrStatus("Text extracted, processing data...");
+      
+      // Process the extracted text
+      handleExtractedText(text);
+    } catch (error) {
+      console.error("OCR Error:", error);
+      toast.error("Error extracting text from document.");
+      setOcrStatus("");
+    }
+  };
 
-      if (medication && medication !== "Unknown") {
-        setMedicationName(medication);
+  // Handle the extracted text from OCR
+  const handleExtractedText = async (text: string) => {
+    try {
+      // Auto-fill form fields based on OCR
+      const medicationMatch = text.match(/medication:?\s*([\w\s\-]+)/i) || 
+                             text.match(/med:?\s*([\w\s\-]+)/i) ||
+                             text.match(/prescribed:?\s*([\w\s\-]+)/i);
+      
+      const dosageMatch = text.match(/dosage:?\s*([\w\s\.\/\-]+)/i) || 
+                          text.match(/dose:?\s*([\w\s\.\/\-]+)/i) ||
+                          text.match(/take:?\s*([\w\s\.\/\-]+)/i);
+      
+      const refillsMatch = text.match(/refill[s]?:?\s*(\d+)/i) || 
+                           text.match(/repeats:?\s*(\d+)/i);
+      
+      // Update form values if matches found
+      if (medicationMatch && medicationMatch[1].trim() !== "Unknown") {
+        form.setValue("medicationName", medicationMatch[1].trim());
       }
-
-      if (extractedDosage && extractedDosage !== "Unknown") {
-        setDosage(extractedDosage);
+      
+      if (dosageMatch && dosageMatch[1].trim() !== "Unknown") {
+        form.setValue("dosage", dosageMatch[1].trim());
       }
-
-      if (typeof extractedRefills === "number") {
-        setRefills(extractedRefills);
+      
+      if (refillsMatch) {
+        form.setValue("refills", parseInt(refillsMatch[1]));
       }
-
-      toast.success("Form fields auto-filled from document");
+      
+      // Set preview data
+      setPreviewData({
+        medication: medicationMatch ? medicationMatch[1].trim() : "Not detected",
+        dosage: dosageMatch ? dosageMatch[1].trim() : "Not detected",
+        refills: refillsMatch ? parseInt(refillsMatch[1]) : 0,
+      });
+      
+      setOcrStatus("");
+      toast.success("Document processed successfully!");
+    } catch (error) {
+      console.error("Error processing text:", error);
+      toast.error("Error processing document text.");
+      setOcrStatus("");
     }
-  }, [ocrData]);
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!patientId) {
-      toast.error("Please select a patient");
-      return;
-    }
-
-    if (!medicationName) {
-      toast.error("Please enter medication name");
-      return;
-    }
-
-    if (!dosage) {
-      toast.error("Please enter dosage");
-      return;
-    }
-
+  // Handle form submission
+  const onSubmit = async (values: FormValues) => {
     if (!uploadedFile) {
       toast.error("Please select a file to upload");
       return;
     }
 
-    setIsUploading(true);
-    setOcrStatus("Uploading document...");
     try {
-      // Perform OCR
-      let extractedText = "";
-      try {
-        const worker = await createWorker("eng");
-        const {
-          data: { text },
-        } = await worker.recognize(uploadedFile);
-        await worker.terminate();
-        extractedText = text;
-      } catch (ocrError) {
-        console.error("OCR Error:", ocrError);
-        toast.error("OCR processing failed.");
-        throw ocrError;
-      }
-
-      // Upload document
+      setIsUploading(true);
+      setOcrStatus("Uploading document...");
+      
+      // Upload the document to storage
       const uploadResult = await uploadPrescriptionDocument(
         uploadedFile,
-        patientId,
+        values.patientId
       );
-
+      
+      setOcrStatus("Processing document...");
       setIsUploading(false);
       setIsProcessing(true);
-      setOcrStatus("Processing with OCR...");
-
-      // Send data to the edge function
-      const response = await fetch("/api/process-document", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          documentUrl: uploadResult.url,
-          documentPath: uploadedFile.name,
-          patientId,
-          extractedText,
-        }),
-      });
-
-      const data = await response.json();
-        if (data.error) {
-          toast.error("Error processing document");
+      
+      // Get OCR text from the file if not already processed
+      let extractedText = "";
+      if (!previewData) {
+        try {
+          const worker = await createWorker("eng");
+          const { data: { text } } = await worker.recognize(uploadedFile);
+          await worker.terminate();
+          extractedText = text;
+        } catch (ocrError) {
+          console.error("OCR Error:", ocrError);
+          toast.error("OCR processing failed.");
+          setIsProcessing(false);
+          setOcrStatus("");
           return;
         }
-
-      // Store OCR data for auto-filling fields
-      setOcrData(data);
-
-      // Create prescription record
-      await createPrescription({
-        patient_id: patientId,
-        patient_name: selectedPatient?.name || "Unknown Patient",
-        medication: medicationName,
-        dosage: dosage,
-        prescribed_date: new Date().toISOString(),
-        refills: refills,
-        status: "active",
-        document_url: uploadResult.url,
-      });
-
+      }
+      
+      // Process the document with the edge function
+      const processResult = await processPrescriptionDocument(
+        uploadResult.url,
+        uploadResult.path,
+        values.patientId,
+        extractedText
+      );
+      
+      if (!processResult?.success) {
+        throw new Error(processResult?.error || "Document processing failed");
+      }
+      
+      // Store OCR data for reference
+      setOcrData(processResult);
+      
       toast.success("Prescription uploaded and processed successfully");
       navigate("/prescriptions");
     } catch (error: any) {
       console.error("Upload error:", error);
       toast.error(error.message || "Error processing document");
-      setOcrStatus("");
     } finally {
+      setIsUploading(false);
       setIsProcessing(false);
       setOcrStatus("");
     }
   };
+
+  // React to patient ID change
+  useEffect(() => {
+    const patientId = form.watch("patientId");
+    if (patientId && uploadedFile) {
+      performOcr(uploadedFile);
+    }
+  }, [form.watch("patientId")]);
 
   // OCR Status component
   const OcrStatusIndicator = () => {
@@ -207,6 +264,40 @@ const Upload = () => {
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
         <p className="text-sm font-medium">{ocrStatus}</p>
       </div>
+    );
+  };
+
+  // Document preview component
+  const DocumentPreview = () => {
+    if (!previewData) return null;
+
+    return (
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-medium flex items-center">
+            <Sparkles className="h-5 w-5 mr-2 text-primary" />
+            Extracted Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Medication</p>
+                <p className="font-medium">{previewData.medication}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Dosage</p>
+                <p className="font-medium">{previewData.dosage}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Refills</p>
+                <p className="font-medium">{previewData.refills}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     );
   };
 
@@ -222,222 +313,258 @@ const Upload = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="docType">Document Type</Label>
-                  <Select value={docType} onValueChange={setDocType}>
-                    <SelectTrigger id="docType">
-                      <SelectValue placeholder="Select document type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="prescription">Prescription</SelectItem>
-                      <SelectItem value="labResult">Lab Result</SelectItem>
-                      <SelectItem value="medicalRecord">
-                        Medical Record
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="patientId">Patient</Label>
-                  <Select
-                    value={patientId}
-                    onValueChange={setPatientId}
-                    disabled={isLoadingPatients}
-                  >
-                    <SelectTrigger id="patientId">
-                      <SelectValue
-                        placeholder={
-                          isLoadingPatients
-                            ? "Loading patients..."
-                            : "Select patient"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {patients.map((patient) => (
-                        <SelectItem key={patient.id} value={patient.id}>
-                          {patient.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="medication">Medication Name</Label>
-                    {ocrData && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Sparkles className="h-3 w-3" />
-                        Auto-filled
-                      </div>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="docType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Document Type</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select document type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="prescription">Prescription</SelectItem>
+                            <SelectItem value="labResult">Lab Result</SelectItem>
+                            <SelectItem value="medicalRecord">Medical Record</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
                     )}
-                  </div>
-                  <Input
-                    id="medication"
-                    placeholder="Enter medication name"
-                    value={medicationName}
-                    onChange={(e) => setMedicationName(e.target.value)}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="patientId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Patient</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          disabled={isLoadingPatients}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  isLoadingPatients
+                                    ? "Loading patients..."
+                                    : "Select patient"
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {patients.map((patient) => (
+                              <SelectItem key={patient.id} value={patient.id}>
+                                {patient.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="dosage">Dosage</Label>
-                    {ocrData && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Sparkles className="h-3 w-3" />
-                        Auto-filled
-                      </div>
-                    )}
-                  </div>
-                  <Input
-                    id="dosage"
-                    placeholder="E.g. 10mg, twice daily"
-                    value={dosage}
-                    onChange={(e) => setDosage(e.target.value)}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="refills">Refills</Label>
-                    {ocrData && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Sparkles className="h-3 w-3" />
-                        Auto-filled
-                      </div>
-                    )}
-                  </div>
-                  <Input
-                    id="refills"
-                    type="number"
-                    min={0}
-                    placeholder="Number of refills"
-                    value={refills}
-                    onChange={(e) => setRefills(parseInt(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              <div
-                className={`border-2 border-dashed rounded-lg p-6 ${
-                  uploadedFile ? "border-primary" : "border-border"
-                } text-center`}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-              >
-                {!uploadedFile ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-center">
-                      <div className="bg-muted rounded-full p-3">
-                        <UploadIcon className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">
-                        Drag & drop file or{" "}
-                        <label className="text-primary cursor-pointer hover:underline">
-                          browse
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="medicationName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Medication Name</FormLabel>
+                          {previewData && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Sparkles className="h-3 w-3" />
+                              Auto-filled
+                            </div>
+                          )}
+                        </div>
+                        <FormControl>
                           <Input
-                            type="file"
-                            className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={handleFileChange}
+                            placeholder="Enter medication name"
+                            {...field}
                           />
-                        </label>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Supports PDF, JPG, PNG (max 10MB)
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between bg-accent/30 p-3 rounded">
-                    <div className="flex items-center space-x-3">
-                      {uploadedFile.type.includes("pdf") ? (
-                        <FileText className="h-8 w-8 text-primary" />
-                      ) : (
-                        <Image className="h-8 w-8 text-primary" />
-                      )}
-                      <div className="text-left">
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="dosage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Dosage</FormLabel>
+                          {previewData && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Sparkles className="h-3 w-3" />
+                              Auto-filled
+                            </div>
+                          )}
+                        </div>
+                        <FormControl>
+                          <Input
+                            placeholder="E.g. 10mg, twice daily"
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="refills"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Refills</FormLabel>
+                          {previewData && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Sparkles className="h-3 w-3" />
+                              Auto-filled
+                            </div>
+                          )}
+                        </div>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Number of refills"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 ${
+                    uploadedFile ? "border-primary" : "border-border"
+                  } text-center`}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                >
+                  {!uploadedFile ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <div className="bg-muted rounded-full p-3">
+                          <UploadIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      </div>
+                      <div>
                         <p className="text-sm font-medium">
-                          {uploadedFile.name}
+                          Drag & drop file or{" "}
+                          <label className="text-primary cursor-pointer hover:underline">
+                            browse
+                            <Input
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              onChange={handleFileChange}
+                            />
+                          </label>
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Supports PDF, JPG, PNG (max 10MB)
                         </p>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={removeFile}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <OcrStatusIndicator />
-
-              <div className="bg-muted/30 rounded p-4 border border-muted flex items-start space-x-3">
-                <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium">Important</p>
-                  <p className="text-muted-foreground">
-                    All uploaded documents are encrypted and stored in
-                    compliance with HIPAA regulations. Ensure that all PHI is
-                    properly contained within the document before uploading.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate("/dashboard")}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    isUploading ||
-                    isProcessing ||
-                    !uploadedFile ||
-                    !patientId ||
-                    !medicationName ||
-                    !dosage
-                  }
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
                   ) : (
-                    <>
-                      <UploadIcon className="mr-2 h-4 w-4" />
-                      Upload & Process
-                    </>
+                    <div className="flex items-center justify-between bg-accent/30 p-3 rounded">
+                      <div className="flex items-center space-x-3">
+                        {uploadedFile.type.includes("pdf") ? (
+                          <FileText className="h-8 w-8 text-primary" />
+                        ) : (
+                          <Image className="h-8 w-8 text-primary" />
+                        )}
+                        <div className="text-left">
+                          <p className="text-sm font-medium">
+                            {uploadedFile.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={removeFile}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
-                </Button>
-              </div>
-            </form>
+                </div>
+
+                <OcrStatusIndicator />
+                <DocumentPreview />
+
+                <div className="bg-muted/30 rounded p-4 border border-muted flex items-start space-x-3">
+                  <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium">Important</p>
+                    <p className="text-muted-foreground">
+                      All uploaded documents are encrypted and stored in
+                      compliance with HIPAA regulations. Ensure that all PHI is
+                      properly contained within the document before uploading.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate("/dashboard")}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={
+                      isUploading ||
+                      isProcessing ||
+                      !uploadedFile
+                    }
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <UploadIcon className="mr-2 h-4 w-4" />
+                        Upload & Process
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </CardContent>
         </Card>
 
@@ -469,7 +596,7 @@ const Upload = () => {
                 <div>
                   <p className="font-medium">AI-Powered OCR</p>
                   <p className="text-sm text-muted-foreground">
-                    Our LayoutLMv3 AI model extracts structured data from your
+                    Our AI model extracts structured data from your
                     documents.
                   </p>
                 </div>
