@@ -22,11 +22,15 @@ import {
   CheckCircle2,
   Loader2,
   FileText,
-  Sparkles
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchPatients } from "@/services/patientService";
-import { uploadPrescriptionDocument, createPrescription } from "@/services/prescriptionService";
+import {
+  uploadPrescriptionDocument,
+  createPrescription,
+} from "@/services/prescriptionService";
+import { createWorker } from "tesseract.js";
 
 const Upload = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -40,15 +44,15 @@ const Upload = () => {
   const [ocrStatus, setOcrStatus] = useState("");
   const [ocrData, setOcrData] = useState<any>(null);
   const navigate = useNavigate();
-  
+
   // Fetch patients for the dropdown
   const { data: patients = [], isLoading: isLoadingPatients } = useQuery({
-    queryKey: ['patients'],
+    queryKey: ["patients"],
     queryFn: fetchPatients,
   });
-  
+
   // Get patient name from ID
-  const selectedPatient = patients.find(p => p.id === patientId);
+  const selectedPatient = patients.find((p) => p.id === patientId);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -74,42 +78,46 @@ const Upload = () => {
   // Auto-fill fields from OCR data if available
   useEffect(() => {
     if (ocrData?.extracted_data) {
-      const { medication, dosage: extractedDosage, refills: extractedRefills } = ocrData.extracted_data;
-      
+      const {
+        medication,
+        dosage: extractedDosage,
+        refills: extractedRefills,
+      } = ocrData.extracted_data;
+
       if (medication && medication !== "Unknown") {
         setMedicationName(medication);
       }
-      
+
       if (extractedDosage && extractedDosage !== "Unknown") {
         setDosage(extractedDosage);
       }
-      
-      if (typeof extractedRefills === 'number') {
+
+      if (typeof extractedRefills === "number") {
         setRefills(extractedRefills);
       }
-      
+
       toast.success("Form fields auto-filled from document");
     }
   }, [ocrData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!patientId) {
       toast.error("Please select a patient");
       return;
     }
-    
+
     if (!medicationName) {
       toast.error("Please enter medication name");
       return;
     }
-    
+
     if (!dosage) {
       toast.error("Please enter dosage");
       return;
     }
-    
+
     if (!uploadedFile) {
       toast.error("Please select a file to upload");
       return;
@@ -118,30 +126,68 @@ const Upload = () => {
     setIsUploading(true);
     setOcrStatus("Uploading document...");
     try {
-      // Upload document and process with OCR
-      const uploadResult = await uploadPrescriptionDocument(uploadedFile, patientId);
-      
+      // Perform OCR
+      let extractedText = "";
+      try {
+        const worker = await createWorker("eng");
+        const {
+          data: { text },
+        } = await worker.recognize(uploadedFile);
+        await worker.terminate();
+        extractedText = text;
+      } catch (ocrError) {
+        console.error("OCR Error:", ocrError);
+        toast.error("OCR processing failed.");
+        throw ocrError;
+      }
+
+      // Upload document
+      const uploadResult = await uploadPrescriptionDocument(
+        uploadedFile,
+        patientId,
+      );
+
       setIsUploading(false);
       setIsProcessing(true);
       setOcrStatus("Processing with OCR...");
-      
+
+      // Send data to the edge function
+      const response = await fetch("/api/process-document", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          documentUrl: uploadResult.url,
+          documentPath: uploadedFile.name,
+          patientId,
+          extractedText,
+        }),
+      });
+
+      const data = await response.json();
+        if (data.error) {
+          toast.error("Error processing document");
+          return;
+        }
+
       // Store OCR data for auto-filling fields
-      setOcrData(uploadResult);
-      
+      setOcrData(data);
+
       // Create prescription record
       await createPrescription({
         patient_id: patientId,
-        patient_name: selectedPatient?.name || 'Unknown Patient',
+        patient_name: selectedPatient?.name || "Unknown Patient",
         medication: medicationName,
         dosage: dosage,
         prescribed_date: new Date().toISOString(),
         refills: refills,
-        status: 'active',
-        document_url: uploadResult.url
+        status: "active",
+        document_url: uploadResult.url,
       });
 
       toast.success("Prescription uploaded and processed successfully");
-      navigate('/prescriptions');
+      navigate("/prescriptions");
     } catch (error: any) {
       console.error("Upload error:", error);
       toast.error(error.message || "Error processing document");
@@ -155,7 +201,7 @@ const Upload = () => {
   // OCR Status component
   const OcrStatusIndicator = () => {
     if (!ocrStatus) return null;
-    
+
     return (
       <div className="flex items-center space-x-2 bg-primary/10 p-3 rounded mt-4">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -180,17 +226,16 @@ const Upload = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="docType">Document Type</Label>
-                  <Select
-                    value={docType}
-                    onValueChange={setDocType}
-                  >
+                  <Select value={docType} onValueChange={setDocType}>
                     <SelectTrigger id="docType">
                       <SelectValue placeholder="Select document type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="prescription">Prescription</SelectItem>
                       <SelectItem value="labResult">Lab Result</SelectItem>
-                      <SelectItem value="medicalRecord">Medical Record</SelectItem>
+                      <SelectItem value="medicalRecord">
+                        Medical Record
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -202,7 +247,13 @@ const Upload = () => {
                     disabled={isLoadingPatients}
                   >
                     <SelectTrigger id="patientId">
-                      <SelectValue placeholder={isLoadingPatients ? "Loading patients..." : "Select patient"} />
+                      <SelectValue
+                        placeholder={
+                          isLoadingPatients
+                            ? "Loading patients..."
+                            : "Select patient"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {patients.map((patient) => (
@@ -214,7 +265,7 @@ const Upload = () => {
                   </Select>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -251,7 +302,7 @@ const Upload = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -315,7 +366,9 @@ const Upload = () => {
                         <Image className="h-8 w-8 text-primary" />
                       )}
                       <div className="text-left">
-                        <p className="text-sm font-medium">{uploadedFile.name}</p>
+                        <p className="text-sm font-medium">
+                          {uploadedFile.name}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
                         </p>
@@ -340,20 +393,31 @@ const Upload = () => {
                 <div className="text-sm">
                   <p className="font-medium">Important</p>
                   <p className="text-muted-foreground">
-                    All uploaded documents are encrypted and stored in compliance with
-                    HIPAA regulations. Ensure that all PHI is properly contained within
-                    the document before uploading.
+                    All uploaded documents are encrypted and stored in
+                    compliance with HIPAA regulations. Ensure that all PHI is
+                    properly contained within the document before uploading.
                   </p>
                 </div>
               </div>
 
               <div className="flex justify-end space-x-3">
-                <Button type="button" variant="outline" onClick={() => navigate('/dashboard')}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate("/dashboard")}
+                >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isUploading || isProcessing || !uploadedFile || !patientId || !medicationName || !dosage}
+                  disabled={
+                    isUploading ||
+                    isProcessing ||
+                    !uploadedFile ||
+                    !patientId ||
+                    !medicationName ||
+                    !dosage
+                  }
                 >
                   {isUploading ? (
                     <>
@@ -392,7 +456,8 @@ const Upload = () => {
                 <div>
                   <p className="font-medium">Secure Upload</p>
                   <p className="text-sm text-muted-foreground">
-                    Documents are encrypted and stored in a HIPAA-compliant cloud storage.
+                    Documents are encrypted and stored in a HIPAA-compliant
+                    cloud storage.
                   </p>
                 </div>
               </div>
@@ -404,7 +469,8 @@ const Upload = () => {
                 <div>
                   <p className="font-medium">AI-Powered OCR</p>
                   <p className="text-sm text-muted-foreground">
-                    Our LayoutLMv3 AI model extracts structured data from your documents.
+                    Our LayoutLMv3 AI model extracts structured data from your
+                    documents.
                   </p>
                 </div>
               </div>
@@ -416,7 +482,8 @@ const Upload = () => {
                 <div>
                   <p className="font-medium">Data Validation</p>
                   <p className="text-sm text-muted-foreground">
-                    Medical entities like medications and dosages are verified and standardized.
+                    Medical entities like medications and dosages are verified
+                    and standardized.
                   </p>
                 </div>
               </div>
@@ -428,7 +495,8 @@ const Upload = () => {
                 <div>
                   <p className="font-medium">Searchable Database</p>
                   <p className="text-sm text-muted-foreground">
-                    Documents and their data become instantly searchable and available for analytics.
+                    Documents and their data become instantly searchable and
+                    available for analytics.
                   </p>
                 </div>
               </div>

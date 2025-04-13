@@ -1,4 +1,4 @@
-
+import { Database } from "@/types/database.types";
 import { supabase } from '@/lib/supabase';
 import { Patient, PatientStat } from '@/types/database.types';
 
@@ -34,23 +34,19 @@ export async function seedPatientsIfEmpty() {
   }
 }
 
-export async function fetchPatients() {
-  try {
-    // First try to seed some sample patients if the table is empty
-    await seedPatientsIfEmpty();
-    
-    const { data, error } = await supabase
-      .from('patients')
-      .select('*')
-      .order('name');
+type Patient = Database["public"]["Tables"]["patients"]["Row"];
 
-    if (error) throw error;
-    return data as Patient[];
-  } catch (error) {
-    console.error('Error fetching patients:', error);
+export async function fetchPatients(): Promise<Patient[]> {
+  const { data, error } = await supabase.from("patients").select("*");
+
+  if (error) {
+    console.error("Error fetching patients:", error);
     throw error;
   }
+
+  return data || [];
 }
+
 
 export async function fetchPatientStats(): Promise<PatientStat> {
   try {

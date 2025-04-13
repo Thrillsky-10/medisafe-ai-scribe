@@ -174,7 +174,7 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
       .getPublicUrl(filePath);
 
     // Process the document with OCR
-    const processingResult = await processPrescriptionDocument(publicUrlData.publicUrl, filePath, patientId);
+    const processingResult = await processPrescriptionDocument(publicUrlData.publicUrl, filePath, patientId, "");
     
     if (!processingResult?.success) {
       console.error('Document processing failed:', processingResult?.error);
@@ -193,12 +193,13 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
   }
 }
 
-export async function processPrescriptionDocument(documentUrl: string, documentPath: string, patientId: string) {
+export async function processPrescriptionDocument(documentUrl: string, documentPath: string, patientId: string, extractedText: string) {
   try {
     const { data, error } = await supabase.functions.invoke('process-document', {
       body: {
         documentUrl,
         documentPath,
+        extractedText,
         patientId,
       },
     });
