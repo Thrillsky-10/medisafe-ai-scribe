@@ -1,8 +1,7 @@
-
 // src/services/prescriptionService.ts
 
 import { supabase } from "@/lib/supabase";
-import { Prescription, MedicationStat } from "@/types/database.types";
+import { Prescription, PatientStat, MedicationStat } from "@/types/database.types";
 
 // Helper type for the 'prescriptions' table
 type OcrResult = {
@@ -21,11 +20,6 @@ export interface PrescriptionStat {
   active: number;
   completed: number;
   expired: number;
-}
-
-export interface MedicationStat {
-  medication: string;
-  count: number;
 }
 
 export interface CreatePrescriptionData {
