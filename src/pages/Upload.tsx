@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -130,10 +131,12 @@ const Upload = () => {
         const imageUrl = URL.createObjectURL(file);
         
         try {
+          // Fix: Pass the language as a string, not an object
           const worker = await createWorker('eng');
+          // Fix: Use the correct type for parameters
           await worker.setParameters({
-            tessedit_ocr_engine_mode: '1',
-            preserve_interword_spaces: '1'
+            tessedit_ocr_engine_mode: 1, // Number instead of string
+            preserve_interword_spaces: 1 // Number instead of string
           });
           
           const { data } = await worker.recognize(imageUrl);
@@ -232,12 +235,17 @@ const Upload = () => {
       setIsUploading(false);
       setIsProcessing(true);
       
+      // Create a date string in YYYY-MM-DD format for the prescribed_date
+      const currentDate = new Date().toISOString().split('T')[0];
+      
       const prescription = await createPrescription({
         patient_id: values.patientId,
         medication: values.medicationName,
         dosage: values.dosage,
         refills: values.refills,
-        document_url: uploadResult.url
+        document_url: uploadResult.url,
+        prescribed_date: currentDate,
+        status: 'active'
       });
       
       if (!prescription) {
@@ -272,6 +280,7 @@ const Upload = () => {
         console.log("Document processing result:", processResult);
       } catch (processError) {
         console.error("Edge function error:", processError);
+        // Continue with prescription creation even if OCR processing fails
       }
       
       toast.success("Prescription uploaded and created successfully");
@@ -279,6 +288,8 @@ const Upload = () => {
     } catch (error: any) {
       console.error("Upload error:", error);
       toast.error(error.message || "Error processing document");
+      setIsUploading(false);
+      setIsProcessing(false);
     } finally {
       setIsUploading(false);
       setIsProcessing(false);

@@ -105,7 +105,9 @@ export type Database = {
           medication: string | null
           ocr_result_id: string | null
           patient_id: string | null
+          prescribed_date: string | null
           refills: number | null
+          status: string | null
         }
         Insert: {
           created_at?: string | null
@@ -116,7 +118,9 @@ export type Database = {
           medication?: string | null
           ocr_result_id?: string | null
           patient_id?: string | null
+          prescribed_date?: string | null
           refills?: number | null
+          status?: string | null
         }
         Update: {
           created_at?: string | null
@@ -127,7 +131,9 @@ export type Database = {
           medication?: string | null
           ocr_result_id?: string | null
           patient_id?: string | null
+          prescribed_date?: string | null
           refills?: number | null
+          status?: string | null
         }
         Relationships: [
           {
