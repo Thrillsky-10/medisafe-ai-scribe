@@ -14,7 +14,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-accent/30">
       <header className="container mx-auto py-6 px-4 flex justify-between items-center">
-        <div className="text-2xl font-bold text-primary">MediSafe AI</div>
+        <div className="text-2xl font-bold text-primary">PrescriptiBot</div>
         <Button onClick={() => setIsLogin(true)} variant="outline">
           Sign In
         </Button>
@@ -77,7 +77,7 @@ const Index = () => {
 
       <footer className="container mx-auto py-8 px-4 mt-12 border-t border-border text-center">
         <p className="text-sm text-muted-foreground">
-          © 2025 MediSafe AI. All rights reserved. HIPAA Compliant.
+          © 2025 PrescriptiBot. All rights reserved. HIPAA Compliant.
         </p>
       </footer>
     </div>

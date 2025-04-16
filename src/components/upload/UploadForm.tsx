@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -90,7 +91,7 @@ export const UploadForm = ({ patients, isLoadingPatients }: UploadFormProps) => 
         const imageUrl = URL.createObjectURL(file);
         
         try {
-          const worker = await createWorker('eng');
+          const worker = await createWorker("eng");
           await worker.setParameters({
             tessedit_ocr_engine_mode: 1, 
             preserve_interword_spaces: 1
@@ -450,7 +451,6 @@ export const UploadForm = ({ patients, isLoadingPatients }: UploadFormProps) => 
                     type="number"
                     min={0}
                     placeholder="Number of refills"
-                    {...field}
                     onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                     value={field.value}
                   />

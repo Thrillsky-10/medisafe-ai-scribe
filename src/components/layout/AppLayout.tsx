@@ -84,9 +84,9 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         {/* Logo area */}
         <div className="h-16 border-b border-border flex items-center px-4">
           {isSidebarOpen ? (
-            <div className="text-xl font-semibold text-primary">MediSafe AI</div>
+            <div className="text-xl font-semibold text-primary">PrescriptiBot</div>
           ) : (
-            <div className="text-xl font-semibold text-primary">MS</div>
+            <div className="text-xl font-semibold text-primary">PB</div>
           )}
         </div>
 
