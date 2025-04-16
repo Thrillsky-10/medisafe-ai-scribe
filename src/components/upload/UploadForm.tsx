@@ -93,8 +93,8 @@ export const UploadForm = ({ patients, isLoadingPatients }: UploadFormProps) => 
         try {
           const worker = await createWorker("eng");
           await worker.setParameters({
-            tessedit_ocr_engine_mode: 1, 
-            preserve_interword_spaces: 1
+            tessedit_ocr_engine_mode: "1", // Fixed here: Changed from number 1 to string "1"
+            preserve_interword_spaces: "1"  // Also ensuring this is a string
           });
           
           const { data } = await worker.recognize(imageUrl);
