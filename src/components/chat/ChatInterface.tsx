@@ -49,8 +49,7 @@ export const ChatInterface = () => {
         // Use a simpler embedding model for performance
         const extractor = await pipeline(
           "feature-extraction",
-          "Xenova/all-MiniLM-L6-v2",
-          { quantized: true }
+          "Xenova/all-MiniLM-L6-v2"
         );
         setModel(extractor);
       } catch (error) {
