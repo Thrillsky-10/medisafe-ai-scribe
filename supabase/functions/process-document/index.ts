@@ -27,7 +27,7 @@ interface ProcessDocumentPayload {
  * @returns {object} - An object containing extracted data.
  */
 function extractData(text: string) {
-  // More comprehensive regex patterns for better extraction
+  // Enhanced regex patterns for better extraction
   const medicationMatch = text.match(/medication:?\s*([\w\s\-]+)/i) || 
                          text.match(/med:?\s*([\w\s\-]+)/i) ||
                          text.match(/prescribed:?\s*([\w\s\-]+)/i) ||
@@ -38,6 +38,7 @@ function extractData(text: string) {
                      text.match(/dose:?\s*([\w\s\.\/\-]+)/i) ||
                      text.match(/take:?\s*([\w\s\.\/\-]+)/i) ||
                      text.match(/sig:?\s*([\w\s\.\/\-]+)/i) ||
+                     text.match(/daily:?\s*([\w\s\.\/\-]+)/i) ||
                      text.match(/(\d+\s*mg|\d+\s*ml|\d+\s*tablet|\d+\s*cap|once daily|twice daily|three times daily|every \d+ hours)/i);
   
   const refillsMatch = text.match(/refill[s]?:?\s*(\d+)/i) || 
