@@ -4,6 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { User, Phone } from "lucide-react";
 
 const patientSchema = z.object({
@@ -70,6 +71,14 @@ export const PatientDetailsForm = ({ onSubmit, isSubmitting = false }: PatientDe
             </FormItem>
           )}
         />
+        
+        <Button 
+          type="submit" 
+          disabled={isSubmitting}
+          className="w-full"
+        >
+          Continue
+        </Button>
       </form>
     </Form>
   );

@@ -9,13 +9,13 @@ const Upload = () => {
     <AppLayout>
       <div className="max-w-3xl mx-auto p-4">
         <h1 className="text-3xl font-bold mb-2">Upload Prescriptions</h1>
-        <p className="text-muted-foreground mb-6">Add new prescriptions for processing</p>
+        <p className="text-muted-foreground mb-6">Upload new prescriptions for automatic processing with OCR</p>
 
         <div className="space-y-6">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium">
-                Upload Prescription Documents
+                Patient Details & Document Upload
               </CardTitle>
             </CardHeader>
             <CardContent>
