@@ -1,4 +1,3 @@
-
 // src/services/prescriptionService.ts
 
 import { supabase } from "@/lib/supabase";
@@ -171,7 +170,7 @@ export async function fetchTopMedications(): Promise<MedicationStat[]> {
   }
 }
 
-export async function uploadPrescriptionDocument(file: File, patientId: string) {
+export async function uploadPrescriptionDocument(file: File, patientMobile: string) {
   try {
     // Check for valid file
     if (!file || file.size === 0) {
@@ -192,21 +191,16 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
 
     // Create filename with proper extension
     const fileExt = file.name.split('.').pop();
-    const fileName = `${patientId}_${Date.now()}.${fileExt}`;
+    const fileName = `${patientMobile}_${Date.now()}.${fileExt}`;
     const filePath = `prescriptions/${fileName}`;
 
     // Check if bucket exists and create if needed
     const { data: buckets } = await supabase.storage.listBuckets();
     if (!buckets?.find(b => b.name === 'prescription-documents')) {
-      try {
-        await supabase.storage.createBucket('prescription-documents', {
-          public: false,
-          fileSizeLimit: 10485760, // 10MB
-        });
-      } catch (bucketError: any) {
-        // If bucket already exists or permission error, continue
-        console.warn('Bucket creation warning:', bucketError.message);
-      }
+      await supabase.storage.createBucket('prescription-documents', {
+        public: false,
+        fileSizeLimit: 10485760, // 10MB
+      });
     }
 
     // Upload the file

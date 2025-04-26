@@ -7,6 +7,7 @@ import { Upload as UploadIcon, Loader2 } from "lucide-react";
 import { PatientDetailsForm, PatientFormData } from "./PatientDetailsForm";
 import { MultiFileUploader } from "./MultiFileUploader";
 import { uploadPrescriptionDocument } from "@/services/prescriptionService";
+import { supabase } from "@/lib/supabase";
 
 export const UploadForm = () => {
   const [isUploading, setIsUploading] = useState(false);
@@ -14,9 +15,33 @@ export const UploadForm = () => {
   const [patientDetails, setPatientDetails] = useState<PatientFormData | null>(null);
   const navigate = useNavigate();
 
-  const handlePatientDetails = (data: PatientFormData) => {
-    setPatientDetails(data);
-    toast.success("Patient details saved");
+  const handlePatientDetails = async (data: PatientFormData) => {
+    try {
+      // Check if patient exists or create new one
+      const { data: existingPatient, error: searchError } = await supabase
+        .from('patients')
+        .select()
+        .eq('mobile', data.mobile)
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        throw searchError;
+      }
+
+      if (!existingPatient) {
+        const { error: createError } = await supabase
+          .from('patients')
+          .insert([{ name: data.name, mobile: data.mobile }]);
+
+        if (createError) throw createError;
+      }
+
+      setPatientDetails(data);
+      toast.success("Patient details saved");
+    } catch (error) {
+      console.error("Error saving patient details:", error);
+      toast.error("Error saving patient details. Please try again.");
+    }
   };
 
   const handleFilesSelected = (files: File[]) => {
@@ -37,11 +62,8 @@ export const UploadForm = () => {
     setIsUploading(true);
 
     try {
-      // Create a temporary patient ID using timestamp and random number
-      const tempPatientId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
       const uploadPromises = selectedFiles.map(file => 
-        uploadPrescriptionDocument(file, tempPatientId)
+        uploadPrescriptionDocument(file, patientDetails.mobile)
       );
 
       await Promise.all(uploadPromises);
@@ -58,7 +80,10 @@ export const UploadForm = () => {
 
   return (
     <div className="space-y-8">
-      <PatientDetailsForm onSubmit={handlePatientDetails} />
+      <PatientDetailsForm 
+        onSubmit={handlePatientDetails}
+        isSubmitting={isUploading}
+      />
 
       {patientDetails && (
         <>
@@ -75,6 +100,7 @@ export const UploadForm = () => {
               type="button"
               variant="outline"
               onClick={() => navigate("/prescriptions")}
+              disabled={isUploading}
             >
               Cancel
             </Button>

@@ -2,7 +2,7 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { User, Phone } from "lucide-react";
 
@@ -18,9 +18,10 @@ export type PatientFormData = z.infer<typeof patientSchema>;
 
 interface PatientDetailsFormProps {
   onSubmit: (data: PatientFormData) => void;
+  isSubmitting?: boolean;
 }
 
-export const PatientDetailsForm = ({ onSubmit }: PatientDetailsFormProps) => {
+export const PatientDetailsForm = ({ onSubmit, isSubmitting = false }: PatientDetailsFormProps) => {
   const form = useForm<PatientFormData>({
     resolver: zodResolver(patientSchema),
     defaultValues: {
@@ -44,6 +45,7 @@ export const PatientDetailsForm = ({ onSubmit }: PatientDetailsFormProps) => {
               <FormControl>
                 <Input placeholder="Enter patient name" {...field} />
               </FormControl>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -64,6 +66,7 @@ export const PatientDetailsForm = ({ onSubmit }: PatientDetailsFormProps) => {
                   {...field} 
                 />
               </FormControl>
+              <FormMessage />
             </FormItem>
           )}
         />
