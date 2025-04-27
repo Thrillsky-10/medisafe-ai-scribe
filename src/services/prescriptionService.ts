@@ -1,4 +1,3 @@
-
 // src/services/prescriptionService.ts
 
 import { supabase } from "@/lib/supabase";
@@ -171,7 +170,11 @@ export async function fetchTopMedications(): Promise<MedicationStat[]> {
   }
 }
 
-export async function uploadPrescriptionDocument(file: File, patientId: string) {
+export async function uploadPrescriptionDocument(
+  file: File,
+  patientName: string,
+  patientMobile: string
+) {
   try {
     // Check for valid file
     if (!file || file.size === 0) {
@@ -190,9 +193,24 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
       throw new Error('File too large. Maximum size is 10MB.');
     }
 
+    // First, get or create patient
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .upsert({
+        name: patientName,
+        mobile: patientMobile
+      })
+      .select()
+      .single();
+
+    if (patientError) {
+      console.error('Error creating/updating patient:', patientError);
+      throw new Error('Failed to create/update patient record');
+    }
+
     // Create filename with proper extension
     const fileExt = file.name.split('.').pop();
-    const fileName = `${patientId}_${Date.now()}.${fileExt}`;
+    const fileName = `${patient.id}_${Date.now()}.${fileExt}`;
     const filePath = `prescriptions/${fileName}`;
 
     // Check if bucket exists and create if needed
@@ -204,7 +222,6 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
           fileSizeLimit: 10485760, // 10MB
         });
       } catch (bucketError: any) {
-        // If bucket already exists or permission error, continue
         console.warn('Bucket creation warning:', bucketError.message);
       }
     }
@@ -230,6 +247,7 @@ export async function uploadPrescriptionDocument(file: File, patientId: string) 
     return {
       path: filePath,
       url: publicUrlData.publicUrl,
+      patient_id: patient.id
     };
   } catch (error) {
     console.error('Error uploading prescription document:', error);
