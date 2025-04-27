@@ -72,6 +72,10 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
           values.patientMobile
         );
 
+        if (!uploadResult || !uploadResult.patient_id) {
+          throw new Error(`Failed to upload document ${i + 1}`);
+        }
+
         setOcrStatus(`Processing document ${i + 1} of ${uploadedFiles.length}...`);
         setIsUploading(false);
         setIsProcessing(true);
@@ -86,9 +90,11 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
             await worker.terminate();
             URL.revokeObjectURL(imageUrl);
           } else if (file.type === 'application/pdf') {
-            // For PDFs, we'll use a placeholder text for now
+            // For PDFs, we'll use a placeholder text
             extractedText = `Prescription scan for ${values.patientName}`;
           }
+
+          console.log("Extracted text:", extractedText ? extractedText.substring(0, 100) + "..." : "none");
 
           const processResult = await processPrescriptionDocument(
             uploadResult.url,
@@ -98,9 +104,14 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
           );
 
           console.log("Document processing result:", processResult);
-        } catch (processError) {
+          
+          if (!processResult || processResult.error) {
+            throw new Error(processResult?.error || "Unknown error during processing");
+          }
+          
+        } catch (processError: any) {
           console.error("Processing error:", processError);
-          toast.error(`Error processing document ${i + 1}`);
+          toast.error(`Error processing document ${i + 1}: ${processError.message || "Unknown error"}`);
         }
       }
 

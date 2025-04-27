@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { Prescription, PatientStat, MedicationStat } from "@/types/database.types";
+import { createPatient } from "./patientService";
 
 // Helper type for the 'prescriptions' table
 type OcrResult = {
@@ -193,25 +194,11 @@ export async function uploadPrescriptionDocument(
       throw new Error('File too large. Maximum size is 10MB.');
     }
 
-    // First, get or create patient
-    // Generate a patient ID if creating a new patient - using a simple prefix + timestamp pattern
-    const patientId = `P${Date.now().toString().substring(6)}`;
+    // First create the patient using the dedicated function
+    const patient = await createPatient(patientName, patientMobile);
     
-    const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .upsert({
-        id: patientId,  // Add ID for new patients
-        name: patientName,
-        mobile: patientMobile
-      }, {
-        onConflict: 'mobile'  // Use mobile as the conflict detection field
-      })
-      .select()
-      .single();
-
-    if (patientError) {
-      console.error('Error creating/updating patient:', patientError);
-      throw new Error('Failed to create/update patient record');
+    if (!patient) {
+      throw new Error('Failed to create or retrieve patient');
     }
 
     // Create filename with proper extension
@@ -227,6 +214,7 @@ export async function uploadPrescriptionDocument(
           public: false,
           fileSizeLimit: 10485760, // 10MB
         });
+        console.log('Created prescription-documents bucket');
       } catch (bucketError: any) {
         console.warn('Bucket creation warning:', bucketError.message);
       }
@@ -279,6 +267,9 @@ export async function processPrescriptionDocument(
     const supabaseUrl = "https://vbxrptkhikmzayxnzlvj.supabase.co";
     const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZieHJwdGtoaWttemF5eG56bHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0NjUwMTksImV4cCI6MjA2MDA0MTAxOX0.At6OnNihnsZ8VA622IluB4LISJ6SjkFbxkKnpGMe34w";
 
+    // Ensure extractedText is a string
+    const safeExtractedText = extractedText || "";
+
     const response = await fetch(
       `${supabaseUrl}/functions/v1/process-document`, 
       {
@@ -291,7 +282,7 @@ export async function processPrescriptionDocument(
           documentUrl,
           documentPath,
           patientId,
-          extractedText
+          extractedText: safeExtractedText
         })
       }
     );

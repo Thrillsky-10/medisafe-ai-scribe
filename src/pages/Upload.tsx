@@ -8,10 +8,12 @@ import { UploadForm } from "@/components/upload/UploadForm";
 import { ProcessingInfo } from "@/components/upload/ProcessingInfo";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { fetchPatients, seedPatientsIfEmpty } from "@/services/patientService";
+import { ensureStorageBuckets } from "@/services/storageService";
 
 const Upload = () => {
   useEffect(() => {
     seedPatientsIfEmpty();
+    ensureStorageBuckets();
   }, []);
 
   const { data: patients = [], isLoading: isLoadingPatients } = useQuery({

@@ -3,10 +3,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
-import { config } from "https://deno.land/std@0.208.0/dotenv/mod.ts";
 
-// Load environment variables
-await config({ export: true });
+// Fix the error with dotenv module by removing it - we'll use Deno.env directly
+// The error was: The requested module 'https://deno.land/std@0.208.0/dotenv/mod.ts' does not provide an export named 'config'
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -116,12 +115,30 @@ serve(async (req) => {
 
     console.log(`Processing document for patient: ${patientId}`);
     console.log(`Document path: ${documentPath}`);
-    console.log(`Text length: ${extractedText.length} characters`);
-    console.log("Extracted text sample:", extractedText.substring(0, 200));
+    console.log(`Text length: ${extractedText?.length || 0} characters`);
+    console.log("Extracted text sample:", extractedText?.substring(0, 200) || "No text available");
 
     // Extract data from the OCR output
-    const extractedData = extractData(extractedText);
+    const extractedData = extractData(extractedText || "");
     console.log("Extracted data:", JSON.stringify(extractedData));
+
+    // Ensure we have a valid storage bucket for documents
+    try {
+      const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+      if (!buckets?.find(b => b.name === 'prescription-documents')) {
+        try {
+          await supabaseAdmin.storage.createBucket('prescription-documents', {
+            public: false,
+            fileSizeLimit: 10485760, // 10MB
+          });
+          console.log("Created 'prescription-documents' bucket");
+        } catch (bucketError: any) {
+          console.warn('Bucket creation warning:', bucketError.message);
+        }
+      }
+    } catch (bucketsError) {
+      console.error('Error checking/creating bucket:', bucketsError);
+    }
 
     // Store the OCR results in the database
     const { data: ocrResult, error: ocrError } = await supabaseAdmin
@@ -130,7 +147,7 @@ serve(async (req) => {
         document_path: documentPath,
         document_url: documentUrl,
         patient_id: patientId,
-        raw_text: extractedText,
+        raw_text: extractedText || "",
         extracted_data: extractedData,
         processed_by: "document-processor",
       })
