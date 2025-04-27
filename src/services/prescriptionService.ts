@@ -171,6 +171,36 @@ export async function fetchTopMedications(): Promise<MedicationStat[]> {
   }
 }
 
+export async function searchPrescriptions(searchTerm: string) {
+  try {
+    let query = supabase
+      .from('prescriptions')
+      .select(`
+        *,
+        patients (
+          name,
+          mobile
+        )
+      `);
+
+    if (searchTerm) {
+      query = query.or(`
+        patient_name.ilike.%${searchTerm}%,
+        patients.name.ilike.%${searchTerm}%,
+        patients.mobile.ilike.%${searchTerm}%
+      `);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error searching prescriptions:', error);
+    throw error;
+  }
+}
+
 export async function uploadPrescriptionDocument(
   file: File,
   patientName: string,
@@ -237,6 +267,17 @@ export async function uploadPrescriptionDocument(
     const { data: publicUrlData } = supabase.storage
       .from('prescription-documents')
       .getPublicUrl(filePath);
+
+    // Ensure we have a valid URL before returning
+    if (!publicUrlData?.publicUrl) {
+      throw new Error('Failed to generate public URL for uploaded file');
+    }
+
+    console.log('Upload successful:', {
+      path: filePath,
+      url: publicUrlData.publicUrl,
+      patient_id: patient.id
+    });
 
     return {
       path: filePath,

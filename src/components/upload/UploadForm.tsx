@@ -66,6 +66,8 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
         const file = uploadedFiles[i];
         setOcrStatus(`Uploading document ${i + 1} of ${uploadedFiles.length}...`);
         
+        console.log('Starting upload for file:', file.name);
+        
         const uploadResult = await uploadPrescriptionDocument(
           file,
           values.patientName,
@@ -76,6 +78,8 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
           throw new Error(`Failed to upload document ${i + 1}`);
         }
 
+        console.log('Upload successful, processing document:', uploadResult);
+        
         setOcrStatus(`Processing document ${i + 1} of ${uploadedFiles.length}...`);
         setIsUploading(false);
         setIsProcessing(true);
@@ -90,7 +94,6 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
             await worker.terminate();
             URL.revokeObjectURL(imageUrl);
           } else if (file.type === 'application/pdf') {
-            // For PDFs, we'll use a placeholder text
             extractedText = `Prescription scan for ${values.patientName}`;
           }
 
@@ -108,7 +111,6 @@ export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadF
           if (!processResult || processResult.error) {
             throw new Error(processResult?.error || "Unknown error during processing");
           }
-          
         } catch (processError: any) {
           console.error("Processing error:", processError);
           toast.error(`Error processing document ${i + 1}: ${processError.message || "Unknown error"}`);
