@@ -194,11 +194,17 @@ export async function uploadPrescriptionDocument(
     }
 
     // First, get or create patient
+    // Generate a patient ID if creating a new patient - using a simple prefix + timestamp pattern
+    const patientId = `P${Date.now().toString().substring(6)}`;
+    
     const { data: patient, error: patientError } = await supabase
       .from('patients')
       .upsert({
+        id: patientId,  // Add ID for new patients
         name: patientName,
         mobile: patientMobile
+      }, {
+        onConflict: 'mobile'  // Use mobile as the conflict detection field
       })
       .select()
       .single();

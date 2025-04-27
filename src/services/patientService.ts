@@ -1,14 +1,13 @@
-
 import { supabase } from '@/lib/supabase';
 import { Patient, PatientStat } from '@/types/database.types';
 
 // Sample patients for development (remove in production)
 const SAMPLE_PATIENTS = [
-  { id: 'P10001', name: 'John Smith', email: 'john@example.com' },
-  { id: 'P10002', name: 'Sarah Johnson', email: 'sarah@example.com' },
-  { id: 'P10003', name: 'Michael Brown', email: 'michael@example.com' },
-  { id: 'P10004', name: 'Emily Davis', email: 'emily@example.com' },
-  { id: 'P10005', name: 'Robert Wilson', email: 'robert@example.com' },
+  { id: 'P10001', name: 'John Smith', email: 'john@example.com', mobile: 'PLACEHOLDER-P10001' },
+  { id: 'P10002', name: 'Sarah Johnson', email: 'sarah@example.com', mobile: 'PLACEHOLDER-P10002' },
+  { id: 'P10003', name: 'Michael Brown', email: 'michael@example.com', mobile: 'PLACEHOLDER-P10003' },
+  { id: 'P10004', name: 'Emily Davis', email: 'emily@example.com', mobile: 'PLACEHOLDER-P10004' },
+  { id: 'P10005', name: 'Robert Wilson', email: 'robert@example.com', mobile: 'PLACEHOLDER-P10005' },
 ];
 
 export async function seedPatientsIfEmpty() {
@@ -31,6 +30,35 @@ export async function seedPatientsIfEmpty() {
     }
   } catch (error) {
     console.error('Error seeding patients:', error);
+  }
+}
+
+// Function to create a patient
+export async function createPatient(name: string, mobile: string, email?: string): Promise<Patient | null> {
+  try {
+    // Generate a patient ID with a simple prefix + timestamp pattern
+    const patientId = `P${Date.now().toString().substring(6)}`;
+    
+    const { data, error } = await supabase
+      .from('patients')
+      .insert({
+        id: patientId,
+        name,
+        mobile,
+        email
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating patient:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in createPatient:', error);
+    throw error;
   }
 }
 

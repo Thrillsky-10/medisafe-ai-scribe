@@ -5,7 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { createWorker } from 'tesseract.js'; // Add this import
+import { createWorker } from 'tesseract.js';
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { FileUploader } from "./FileUploader";
 import { OcrStatusIndicator } from "./OcrStatusIndicator";
 import { FilePreview } from "./FilePreview";
 import { uploadPrescriptionDocument, processPrescriptionDocument } from "@/services/prescriptionService";
-import { Patient } from "@/types/database.types"; // Import Patient type
+import { Patient } from "@/types/database.types";
 
 const formSchema = z.object({
   patientName: z.string().min(1, "Please enter patient name"),
@@ -23,13 +23,13 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-// Update the props interface to include patients and isLoadingPatients
+// Define proper props interface for UploadForm
 interface UploadFormProps {
-  patients: Patient[];
-  isLoadingPatients: boolean;
+  patients?: Patient[];
+  isLoadingPatients?: boolean;
 }
 
-export const UploadForm = ({ patients, isLoadingPatients }: UploadFormProps) => {
+export const UploadForm = ({ patients = [], isLoadingPatients = false }: UploadFormProps) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
