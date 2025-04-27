@@ -16,9 +16,11 @@ import Assistant from "./pages/Assistant";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
+// Create a new QueryClient instance
 const queryClient = new QueryClient();
 
-const AppContent = () => {
+// Separate the AppRoutes component to prevent React context issues
+const AppRoutes = () => {
   useEffect(() => {
     // Seed sample patients when app loads
     seedPatientsIfEmpty();
@@ -61,14 +63,16 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AppContent />
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AppRoutes />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
