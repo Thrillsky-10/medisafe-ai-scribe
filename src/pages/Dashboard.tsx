@@ -13,7 +13,8 @@ import {
   Pill,
   MessageSquare,
   Users,
-  Loader2
+  Loader2,
+  Settings
 } from "lucide-react";
 import { fetchRecentPrescriptions } from "@/services/prescriptionService";
 import { fetchPatientStats } from "@/services/patientService";
