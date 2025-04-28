@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -37,7 +36,6 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchDoctorSettings } from "@/services/doctorSettingsService";
 import { SignatureField } from "@/components/prescriptions/SignatureField";
 
-// Define form schema
 const formSchema = z.object({
   patientName: z.string().min(2, "Name must be at least 2 characters"),
   patientMobile: z.string().min(10, "Mobile number must be at least 10 characters"),
@@ -63,13 +61,11 @@ const CreatePrescription = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  // Fetch doctor settings
   const { data: doctorSettings } = useQuery({
     queryKey: ["doctorSettings"],
     queryFn: fetchDoctorSettings,
   });
 
-  // Initialize form
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -77,14 +73,18 @@ const CreatePrescription = () => {
       patientMobile: "",
       prescriptionDate: new Date(),
       medications: [
-        { name: "", dosage: "", frequency: "", duration: "" }
+        { 
+          name: "",
+          dosage: "",
+          frequency: "",
+          duration: ""
+        }
       ],
       notes: "",
       signatureData: "",
     },
   });
 
-  // Set up medications field array
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "medications",
@@ -98,7 +98,6 @@ const CreatePrescription = () => {
     try {
       setIsSubmitting(true);
       
-      // Call service to create prescription and generate PDF
       const result = await createDigitalPrescription({
         patientName: data.patientName,
         patientMobile: data.patientMobile,
@@ -137,7 +136,6 @@ const CreatePrescription = () => {
           <CardContent className="p-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* Patient Information */}
                 <div>
                   <h2 className="text-lg font-medium mb-4">Patient Information</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -213,7 +211,6 @@ const CreatePrescription = () => {
 
                 <Separator />
 
-                {/* Medications */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-medium">Medications</h2>
@@ -328,7 +325,6 @@ const CreatePrescription = () => {
 
                 <Separator />
 
-                {/* Digital Signature */}
                 <div>
                   <h2 className="text-lg font-medium mb-4">Doctor's Signature</h2>
                   <FormField
