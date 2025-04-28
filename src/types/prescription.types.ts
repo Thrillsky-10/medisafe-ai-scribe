@@ -20,3 +20,10 @@ export const formSchema = z.object({
 });
 
 export type FormData = z.infer<typeof formSchema>;
+
+export interface MedicationDetail {
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+}

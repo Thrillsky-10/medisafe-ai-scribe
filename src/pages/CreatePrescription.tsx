@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Form } from "@/components/ui/form";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
@@ -98,21 +98,21 @@ export default function CreatePrescription() {
                 
                 <MedicationsForm form={form} />
                 
-                <Form.Field
+                <FormField
                   control={form.control}
                   name="notes"
                   render={({ field }) => (
-                    <Form.Item>
-                      <Form.Label>Notes / Special Instructions</Form.Label>
-                      <Form.Control>
+                    <FormItem>
+                      <FormLabel>Notes / Special Instructions</FormLabel>
+                      <FormControl>
                         <Textarea 
                           placeholder="Enter any special instructions or notes"
                           className="min-h-[100px]"
                           {...field} 
                         />
-                      </Form.Control>
-                      <Form.Message />
-                    </Form.Item>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
 
@@ -120,19 +120,19 @@ export default function CreatePrescription() {
 
                 <div>
                   <h2 className="text-lg font-medium mb-4">Doctor's Signature</h2>
-                  <Form.Field
+                  <FormField
                     control={form.control}
                     name="signatureData"
                     render={({ field }) => (
-                      <Form.Item>
-                        <Form.Control>
+                      <FormItem>
+                        <FormControl>
                           <SignatureField 
                             value={field.value}
                             onChange={field.onChange}
                           />
-                        </Form.Control>
-                        <Form.Message />
-                      </Form.Item>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
                   />
                 </div>
