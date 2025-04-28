@@ -12,6 +12,8 @@ import {
   X,
   Upload,
   AlertCircle,
+  Pill,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -45,6 +47,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       icon: <FileText className="h-5 w-5" />,
     },
     {
+      name: "Create Prescription",
+      path: "/create-prescription",
+      icon: <Pill className="h-5 w-5" />,
+    },
+    {
       name: "Upload",
       path: "/upload",
       icon: <Upload className="h-5 w-5" />,
@@ -58,6 +65,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       name: "AI Assistant",
       path: "/assistant",
       icon: <MessageCircle className="h-5 w-5" />,
+    },
+    {
+      name: "Settings",
+      path: "/doctor-settings",
+      icon: <Settings className="h-5 w-5" />,
     },
   ];
 

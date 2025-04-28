@@ -2,7 +2,8 @@
 
 import { supabase } from "@/lib/supabase";
 import { Prescription, PatientStat, MedicationStat } from "@/types/database.types";
-import { createPatient } from "./patientService";
+import { createPatient, fetchPatientByMobile } from "./patientService";
+import { uploadDoctorSignature } from "./doctorSettingsService";
 
 // Helper type for the 'prescriptions' table
 type OcrResult = {
@@ -32,6 +33,28 @@ export interface CreatePrescriptionData {
   prescribed_date?: string;
   status?: 'active' | 'completed' | 'expired';
   document_url?: string;
+}
+
+export interface MedicationDetail {
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+}
+
+export interface CreateDigitalPrescriptionData {
+  patientName: string;
+  patientMobile: string;
+  prescriptionDate: string;
+  medications: MedicationDetail[];
+  notes: string;
+  signatureData: string;
+  doctorSettings?: any;
+}
+
+export interface DigitalPrescriptionResult {
+  prescription: Prescription;
+  pdfUrl: string;
 }
 
 export async function createPrescription(data: CreatePrescriptionData): Promise<Prescription | null> {
@@ -357,5 +380,116 @@ export async function fetchOcrResults(patientId: string): Promise<OcrResult[]> {
   } catch (error) {
     console.error('Error fetching OCR results:', error);
     throw error;
+  }
+}
+
+export async function createDigitalPrescription(
+  data: CreateDigitalPrescriptionData
+): Promise<DigitalPrescriptionResult | null> {
+  try {
+    console.log("Creating digital prescription:", data);
+    
+    // 1. Check if patient exists or create a new one
+    let patient = await fetchPatientByMobile(data.patientMobile);
+    
+    if (!patient) {
+      patient = await createPatient(data.patientName, data.patientMobile);
+      if (!patient) {
+        throw new Error("Failed to create patient");
+      }
+    }
+    
+    // 2. Process and upload signature if needed
+    let signatureUrl = data.signatureData;
+    if (data.signatureData.startsWith("data:image")) {
+      const uploadedUrl = await uploadDoctorSignature(data.signatureData);
+      if (uploadedUrl) {
+        signatureUrl = uploadedUrl;
+      }
+    }
+    
+    // 3. Generate PDF and get URL
+    const pdfData = await generatePrescriptionPDF({
+      patient: {
+        name: data.patientName,
+        mobile: data.patientMobile,
+        id: patient.id
+      },
+      medications: data.medications,
+      prescriptionDate: data.prescriptionDate,
+      notes: data.notes,
+      signature: signatureUrl,
+      doctorSettings: data.doctorSettings
+    });
+    
+    if (!pdfData || !pdfData.url || !pdfData.path) {
+      throw new Error("Failed to generate PDF");
+    }
+    
+    // 4. Create prescription record
+    const medicationList = data.medications.map(med => med.name).join(", ");
+    const dosageList = data.medications.map(med => med.dosage).join(", ");
+    
+    const { data: prescription, error } = await supabase
+      .from("prescriptions")
+      .insert({
+        patient_id: patient.id,
+        medication: medicationList,
+        dosage: dosageList,
+        document_url: pdfData.url,
+        document_path: pdfData.path,
+        prescribed_date: data.prescriptionDate,
+        status: 'active',
+        refills: 0 // Default to 0 refills for digital prescriptions
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Error creating prescription record:", error);
+      throw error;
+    }
+    
+    return {
+      prescription,
+      pdfUrl: pdfData.url
+    };
+  } catch (error) {
+    console.error("Error creating digital prescription:", error);
+    throw error;
+  }
+}
+
+interface PdfGenerationParams {
+  patient: {
+    name: string;
+    mobile: string;
+    id: string;
+  };
+  medications: MedicationDetail[];
+  prescriptionDate: string;
+  notes: string;
+  signature: string;
+  doctorSettings?: any;
+}
+
+async function generatePrescriptionPDF(params: PdfGenerationParams): Promise<{ url: string; path: string } | null> {
+  try {
+    // Call our edge function to generate the PDF
+    const response = await supabase.functions.invoke('generate-prescription-pdf', {
+      body: params
+    });
+    
+    if (!response.data || !response.data.url) {
+      throw new Error("Invalid response from PDF generation service");
+    }
+    
+    return {
+      url: response.data.url,
+      path: response.data.path
+    };
+  } catch (error) {
+    console.error("Error generating prescription PDF:", error);
+    return null;
   }
 }
