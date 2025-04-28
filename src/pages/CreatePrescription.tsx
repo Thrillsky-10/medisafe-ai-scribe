@@ -1,62 +1,27 @@
-import { useState, useEffect } from "react";
+
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { format } from "date-fns";
-import { CalendarIcon, Plus, Trash2, Download } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Form } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
-import { searchMedications } from "@/services/medicationService";
 import { createDigitalPrescription } from "@/services/prescriptionService";
-import { MedicationSearch } from "@/components/prescriptions/MedicationSearch";
+import { SignatureField } from "@/components/prescriptions/SignatureField";
+import { PatientInformationForm } from "@/components/prescriptions/PatientInformationForm";
+import { MedicationsForm } from "@/components/prescriptions/MedicationsForm";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDoctorSettings } from "@/services/doctorSettingsService";
-import { SignatureField } from "@/components/prescriptions/SignatureField";
+import { formSchema, FormData } from "@/types/prescription.types";
 
-const formSchema = z.object({
-  patientName: z.string().min(2, "Name must be at least 2 characters"),
-  patientMobile: z.string().min(10, "Mobile number must be at least 10 characters"),
-  prescriptionDate: z.date({
-    required_error: "Prescription date is required",
-  }),
-  medications: z.array(
-    z.object({
-      name: z.string().min(2, "Medication name is required"),
-      dosage: z.string().min(1, "Dosage is required"),
-      frequency: z.string().min(1, "Frequency is required"),
-      duration: z.string().min(1, "Duration is required"),
-    })
-  ).min(1, "At least one medication is required"),
-  notes: z.string().optional(),
-  signatureData: z.string().min(1, "Signature is required"),
-});
-
-type FormData = z.infer<typeof formSchema>;
-
-const CreatePrescription = () => {
+export default function CreatePrescription() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -85,15 +50,6 @@ const CreatePrescription = () => {
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "medications",
-  });
-
-  const handleAddMedication = () => {
-    append({ name: "", dosage: "", frequency: "", duration: "" });
-  };
-
   const onSubmit = async (data: FormData) => {
     try {
       setIsSubmitting(true);
@@ -101,7 +57,7 @@ const CreatePrescription = () => {
       const result = await createDigitalPrescription({
         patientName: data.patientName,
         patientMobile: data.patientMobile,
-        prescriptionDate: format(data.prescriptionDate, "yyyy-MM-dd"),
+        prescriptionDate: data.prescriptionDate.toISOString().split('T')[0],
         medications: data.medications,
         notes: data.notes || "",
         signatureData: data.signatureData,
@@ -136,190 +92,27 @@ const CreatePrescription = () => {
           <CardContent className="p-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-medium mb-4">Patient Information</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="patientName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Patient Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter patient name" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="patientMobile"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Mobile Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter mobile number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="prescriptionDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Prescription Date</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                initialFocus
-                                className="p-3 pointer-events-auto"
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
+                <PatientInformationForm form={form} />
+                
                 <Separator />
-
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-medium">Medications</h2>
-                    <Button 
-                      type="button" 
-                      onClick={handleAddMedication} 
-                      variant="outline" 
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Medication
-                    </Button>
-                  </div>
-
-                  {fields.map((field, index) => (
-                    <div key={field.id} className="p-4 border rounded-md mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium">Medication #{index + 1}</h3>
-                        {fields.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => remove(index)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`medications.${index}.name`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Medication Name</FormLabel>
-                              <FormControl>
-                                <MedicationSearch 
-                                  value={field.value}
-                                  onChange={field.onChange}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`medications.${index}.dosage`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Dosage</FormLabel>
-                              <FormControl>
-                                <Input placeholder="e.g., 500mg" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`medications.${index}.frequency`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Frequency</FormLabel>
-                              <FormControl>
-                                <Input placeholder="e.g., Twice daily" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`medications.${index}.duration`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Duration</FormLabel>
-                              <FormControl>
-                                <Input placeholder="e.g., 7 days" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <FormField
+                
+                <MedicationsForm form={form} />
+                
+                <Form.Field
                   control={form.control}
                   name="notes"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes / Special Instructions</FormLabel>
-                      <FormControl>
+                    <Form.Item>
+                      <Form.Label>Notes / Special Instructions</Form.Label>
+                      <Form.Control>
                         <Textarea 
                           placeholder="Enter any special instructions or notes"
                           className="min-h-[100px]"
                           {...field} 
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                      </Form.Control>
+                      <Form.Message />
+                    </Form.Item>
                   )}
                 />
 
@@ -327,19 +120,19 @@ const CreatePrescription = () => {
 
                 <div>
                   <h2 className="text-lg font-medium mb-4">Doctor's Signature</h2>
-                  <FormField
+                  <Form.Field
                     control={form.control}
                     name="signatureData"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
+                      <Form.Item>
+                        <Form.Control>
                           <SignatureField 
                             value={field.value}
                             onChange={field.onChange}
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                        </Form.Control>
+                        <Form.Message />
+                      </Form.Item>
                     )}
                   />
                 </div>
@@ -366,6 +159,4 @@ const CreatePrescription = () => {
       </div>
     </AppLayout>
   );
-};
-
-export default CreatePrescription;
+}
