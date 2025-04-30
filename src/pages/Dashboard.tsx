@@ -13,8 +13,7 @@ import {
   Pill,
   MessageSquare,
   Users,
-  Loader2,
-  Settings
+  Loader2
 } from "lucide-react";
 import { fetchRecentPrescriptions } from "@/services/prescriptionService";
 import { fetchPatientStats } from "@/services/patientService";
@@ -64,7 +63,7 @@ const Dashboard = () => {
               <Calendar className="mr-2 h-4 w-4" />
               <span>{currentDate}</span>
             </Button>
-            <Link to="/create-prescription">
+            <Link to="/upload">
               <Button variant="default">
                 <Plus className="mr-2 h-4 w-4" />
                 <span>New Prescription</span>
@@ -200,12 +199,6 @@ const Dashboard = () => {
               <CardTitle className="text-lg font-medium">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Link to="/create-prescription">
-                <Button className="w-full justify-start" variant="outline">
-                  <Pill className="mr-2 h-4 w-4" />
-                  <span>Create Prescription</span>
-                </Button>
-              </Link>
               <Link to="/upload">
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="mr-2 h-4 w-4" />
@@ -228,12 +221,6 @@ const Dashboard = () => {
                 <Button className="w-full justify-start" variant="outline">
                   <MessageSquare className="mr-2 h-4 w-4" />
                   <span>Ask AI Assistant</span>
-                </Button>
-              </Link>
-              <Link to="/doctor-settings">
-                <Button className="w-full justify-start" variant="outline">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Doctor Settings</span>
                 </Button>
               </Link>
             </CardContent>

@@ -14,8 +14,6 @@ import Upload from "./pages/Upload";
 import Analytics from "./pages/Analytics";
 import Assistant from "./pages/Assistant";
 import NotFound from "./pages/NotFound";
-import CreatePrescription from "./pages/CreatePrescription";
-import DoctorSettings from "./pages/DoctorSettings";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // Create a new QueryClient instance
@@ -56,16 +54,6 @@ const AppRoutes = () => {
           <Route path="/assistant" element={
             <ProtectedRoute>
               <Assistant />
-            </ProtectedRoute>
-          } />
-          <Route path="/create-prescription" element={
-            <ProtectedRoute>
-              <CreatePrescription />
-            </ProtectedRoute>
-          } />
-          <Route path="/doctor-settings" element={
-            <ProtectedRoute>
-              <DoctorSettings />
             </ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />

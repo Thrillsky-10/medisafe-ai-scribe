@@ -101,26 +101,6 @@ export async function fetchPatientById(patientId: string): Promise<Patient | nul
   }
 }
 
-export async function fetchPatientByMobile(mobile: string): Promise<Patient | null> {
-  try {
-    const { data, error } = await supabase
-      .from("patients")
-      .select("*")
-      .eq("mobile", mobile)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Error fetching patient by mobile:", error);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error("Error in fetchPatientByMobile:", error);
-    throw error;
-  }
-}
-
 export async function fetchPatientStats(): Promise<PatientStat> {
   try {
     // Total patients
